@@ -4,6 +4,7 @@ authors = ["David Eldon <eldond@fusion.gat.com>"]
 version = "0.1.0"
 
 [deps]
+EFIT = "cda752c5-6b03-55a3-9e33-132a441b0c17"
 Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
 NumericalIntegration = "e7bfaba1-d571-5449-8927-abc22e82249b"
 OMAS = "91cfaa06-6526-4804-8666-b540b3feef2f"

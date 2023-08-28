@@ -2,7 +2,7 @@
 
 julia_version = "1.9.2"
 manifest_format = "2.0"
-project_hash = "4360d2526d87610d8633be1462029b182451e92a"
+project_hash = "3154500008b4ad5891e2c79e47a61f4319096898"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra", "Requires"]
@@ -143,12 +143,6 @@ git-tree-sha1 = "9e2f36d3c96a820c678f2f1f1782582fcf685bae"
 uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 version = "1.9.1"
 
-[[deps.DiskArrays]]
-deps = ["OffsetArrays"]
-git-tree-sha1 = "7e8dcba9d1d1ba8aa576f7d899d42e04d76431b2"
-uuid = "3c3547ce-8d99-4f5e-a174-61eb10b00ae3"
-version = "0.3.15"
-
 [[deps.Distributed]]
 deps = ["Random", "Serialization", "Sockets"]
 uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
@@ -163,6 +157,11 @@ version = "0.9.3"
 deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
 version = "1.6.0"
+
+[[deps.EFIT]]
+git-tree-sha1 = "96ec815af2ff3c1fd1dbb92d2361fb2df2510db4"
+uuid = "cda752c5-6b03-55a3-9e33-132a441b0c17"
+version = "0.2.0"
 
 [[deps.EarCut_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -540,12 +539,6 @@ git-tree-sha1 = "b086b7ea07f8e38cf122f5016af580881ac914fe"
 uuid = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
 version = "0.3.7"
 
-[[deps.NetCDF]]
-deps = ["DiskArrays", "Formatting", "NetCDF_jll"]
-git-tree-sha1 = "328178762645783b20495d408ab317b4c2d25b1a"
-uuid = "30363a11-5582-574a-97bb-aa9a979735b9"
-version = "0.11.7"
-
 [[deps.NetCDF_jll]]
 deps = ["Artifacts", "Bzip2_jll", "HDF5_jll", "JLLWrappers", "LibCURL_jll", "Libdl", "XML2_jll", "Zlib_jll", "Zstd_jll"]
 git-tree-sha1 = "10c612c81eaffdd6b7c28a45a554cdd9d2f40ff1"
@@ -716,7 +709,7 @@ uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 version = "0.7.0"
 
 [[deps.SOLPS2IMAS]]
-deps = ["HDF5", "NCDatasets", "NetCDF", "OMAS", "Plots", "Revise", "Test", "YAML"]
+deps = ["NCDatasets", "OMAS", "Revise", "Test", "YAML"]
 path = "/home/eldond/.julia/dev/SOLPS2IMAS"
 uuid = "09becab6-0636-4c23-a92a-2b3723265c31"
 version = "0.1.0"

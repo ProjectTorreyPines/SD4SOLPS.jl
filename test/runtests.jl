@@ -1,5 +1,7 @@
 import SD4SOLPS
 import SOLPS2IMAS
+import OMAS
+import EFIT
 using Plots
 using Test
 
@@ -31,7 +33,9 @@ end
 
 @testset "utilities" begin
     sample_path = splitdir(pathof(SOLPS2IMAS))[1] * "/../samples/"
-    file_list = SD4SOLPS.find_files_in_allowed_folders(sample_path, eqdsk_file="thereisntoneyet")
+    file_list = SD4SOLPS.find_files_in_allowed_folders(
+        sample_path, eqdsk_file="thereisntoneyet"
+    )
     @test length(file_list) == 4
     b2fgmtry, b2time, gridspec, eqdsk = file_list
     @test length(b2fgmtry) > 10
@@ -40,4 +44,44 @@ end
     @test endswith(b2time, "b2time.nc")
     @test length(gridspec) > 10
     @test endswith(gridspec, "gridspacedesc.yml")
+end
+
+@testset "geqdsk_to_imas" begin
+    sample_file = splitdir(pathof(SD4SOLPS))[1] * "/../sample/g184833.03600"
+    dd = OMAS.dd()
+    tslice = 1
+    SD4SOLPS.geqdsk_to_imas(sample_file, dd, time_index=tslice)
+    eqt = dd.equilibrium.time_slice[tslice]
+
+    # global
+    gq = eqt.global_quantities
+    @test gq.magnetic_axis.r > 0
+    @test dd.equilibrium.vacuum_toroidal_field.r0 > 0
+
+    # 1d
+    p1 = eqt.profiles_1d
+    nprof = length(p1.psi)
+    @test nprof > 10
+    @test p1.psi[1] == gq.psi_axis
+    @test p1.psi[end] == gq.psi_boundary
+    @test length(p1.f) == nprof
+    @test length(p1.pressure) == nprof
+    @test length(p1.rho_tor_norm) == nprof
+
+    # 2d
+    p2 = eqt.profiles_2d[1]
+    @test length(p2.grid.dim1) > 10
+    @test length(p2.grid.dim2) > 10
+    @test size(p2.psi) == (length(p2.grid.dim1), length(p2.grid.dim2))
+
+    # derived
+    @test gq.q_axis == p1.q[1]
+
+    # boundary
+    @test length(eqt.boundary.outline.r) == length(eqt.boundary.outline.z)
+
+    # wall
+    limiter = dd.wall.description_2d[1].limiter
+    @test length(limiter.unit[1].outline.r) > 10
+    @test length(limiter.unit[1].outline.r) == length(limiter.unit[1].outline.z)
 end
