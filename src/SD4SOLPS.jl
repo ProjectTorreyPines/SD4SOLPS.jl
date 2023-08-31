@@ -24,7 +24,6 @@ SD4SOLPS.find_files_in_allowed_folders("<your samples folder>/D3D_Ma_184833_0360
 """
 function find_files_in_allowed_folders(input_dirs...; eqdsk_file, recursive=true)
     files = ["b2fgmtry", "b2time.nc", "gridspacedesc.yml", eqdsk_file]
-    println(files)
     output_files = fill("", length(files))
     if recursive
         dirs = []
@@ -128,9 +127,18 @@ Gathers SOLPS and EFIT files and loads them into IMAS structure. Extrapolates
 profiles as needed to get a complete picture.
 """
 function preparation(eqdsk_file, dirs...)
-    b2fgmtry, b2time, gridspec, eqdsk = find_files_in_allowed_folders(dirs, eqdsk_file=eqdsk_file)
-    dd = SOLPS2IMAS.solps2imas(b2gmtry, b2output, gsdesc)
-    geqdsk_to_imas(eqdsk_file, dd)
+    b2fgmtry, b2time, gridspec, eqdsk = find_files_in_allowed_folders(
+        dirs..., eqdsk_file=eqdsk_file
+    )
+    println("Found source files:")
+    println("    b2fgmtry = ", b2fgmtry)
+    println("    b2time = ", b2time)
+    println("    gridspec = ", gridspec)
+    println("    eqdsk = ", eqdsk)
+    dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time, gridspec)
+    geqdsk_to_imas(eqdsk, dd)
+    println("Loaded data into IMAS DD")
+    return dd
 end
 
 end # module SD4SOLPS

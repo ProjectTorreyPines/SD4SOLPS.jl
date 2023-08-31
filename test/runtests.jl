@@ -47,41 +47,59 @@ end
 end
 
 @testset "geqdsk_to_imas" begin
-    sample_file = splitdir(pathof(SD4SOLPS))[1] * "/../sample/g184833.03600"
-    dd = OMAS.dd()
+    sample_files = (splitdir(pathof(SD4SOLPS))[1] * "/../sample/") .* [
+        "g184833.03600", "geqdsk_iter_small_sample"
+    ]
     tslice = 1
-    SD4SOLPS.geqdsk_to_imas(sample_file, dd, time_index=tslice)
-    eqt = dd.equilibrium.time_slice[tslice]
+    for sample_file in sample_files
+        dd = OMAS.dd()
+        SD4SOLPS.geqdsk_to_imas(sample_file, dd, time_index=tslice)
+        eqt = dd.equilibrium.time_slice[tslice]
 
-    # global
-    gq = eqt.global_quantities
-    @test gq.magnetic_axis.r > 0
-    @test dd.equilibrium.vacuum_toroidal_field.r0 > 0
+        # global
+        gq = eqt.global_quantities
+        @test gq.magnetic_axis.r > 0
+        @test dd.equilibrium.vacuum_toroidal_field.r0 > 0
 
-    # 1d
-    p1 = eqt.profiles_1d
-    nprof = length(p1.psi)
-    @test nprof > 10
-    @test p1.psi[1] == gq.psi_axis
-    @test p1.psi[end] == gq.psi_boundary
-    @test length(p1.f) == nprof
-    @test length(p1.pressure) == nprof
-    @test length(p1.rho_tor_norm) == nprof
+        # 1d
+        p1 = eqt.profiles_1d
+        nprof = length(p1.psi)
+        @test nprof > 10
+        @test p1.psi[1] == gq.psi_axis
+        @test p1.psi[end] == gq.psi_boundary
+        @test length(p1.f) == nprof
+        @test length(p1.pressure) == nprof
+        @test length(p1.rho_tor_norm) == nprof
 
-    # 2d
-    p2 = eqt.profiles_2d[1]
-    @test length(p2.grid.dim1) > 10
-    @test length(p2.grid.dim2) > 10
-    @test size(p2.psi) == (length(p2.grid.dim1), length(p2.grid.dim2))
+        # 2d
+        p2 = eqt.profiles_2d[1]
+        @test length(p2.grid.dim1) > 10
+        @test length(p2.grid.dim2) > 10
+        @test size(p2.psi) == (length(p2.grid.dim1), length(p2.grid.dim2))
 
-    # derived
-    @test gq.q_axis == p1.q[1]
+        # derived
+        @test gq.q_axis == p1.q[1]
 
-    # boundary
-    @test length(eqt.boundary.outline.r) == length(eqt.boundary.outline.z)
+        # boundary
+        @test length(eqt.boundary.outline.r) == length(eqt.boundary.outline.z)
 
-    # wall
-    limiter = dd.wall.description_2d[1].limiter
-    @test length(limiter.unit[1].outline.r) > 10
-    @test length(limiter.unit[1].outline.r) == length(limiter.unit[1].outline.z)
+        # wall
+        limiter = dd.wall.description_2d[1].limiter
+        @test length(limiter.unit[1].outline.r) > 10
+        @test length(limiter.unit[1].outline.r) == length(limiter.unit[1].outline.z)
+    end
+end
+
+@testset "preparation" begin
+    eqdsk_file = "geqdsk_iter_small_sample"
+    sample_paths = [
+        splitdir(pathof(SOLPS2IMAS))[1] * "/../samples/",
+        splitdir(pathof(SD4SOLPS))[1] * "/../sample/",
+    ]
+    dd = SD4SOLPS.preparation(eqdsk_file, sample_paths...)
+    p2 = dd.equilibrium.time_slice[1].profiles_2d[1]
+    psirz = p2.psi
+    r = p2.grid.dim1
+    z = p2.grid.dim2
+    @test size(psirz) == (length(r), length(z))
 end
