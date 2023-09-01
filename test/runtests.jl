@@ -5,12 +5,26 @@ import EFIT
 using Plots
 using Test
 
+"""
+    make_test_profile()
+
+Makes a modified tanh profile based on the formula from:
+Groebner, et al., Nucl. Fusion 41, 1789 (2001) 10.1088/0029-5515/41/12/306
+
+x: position basis. The output will be a function of this coordinate.
+    Could be psi_N or R or Z or whatever, as long as sym and hwid are
+    specified in terms of the same coordinate.
+    Defaults are given in terms of psi_N.
+sym: location of the tanh symmetry point
+hwid: half width of the tanh
+offset: value at the foot of the tanh / SOL value
+pedestal: value at the top of the tanh / pedestal value
+alpha: interior slope
+"""
 function make_test_profile(x; sym=0.9657, hwid=0.05421, offset=0.0953, pedestal=3.58901, alpha=0.005)
     z = (sym .- x) ./ hwid
     amplitude = (pedestal - offset) / 2.0
     b = offset + amplitude
-    # modified tanh profile formula from:
-    # Groebner, et al., Nucl. Fusion 41, 1789 (2001) 10.1088/0029-5515/41/12/306
     return b .+ amplitude .* ((1 .+ alpha .* z) .* exp.(z) .- exp.(.-z)) ./ (exp.(z) .+ exp.(.-z))
 end
 
@@ -32,6 +46,7 @@ end
 end
 
 @testset "utilities" begin
+    # Test for finding files in allowed folders
     sample_path = splitdir(pathof(SOLPS2IMAS))[1] * "/../samples/"
     file_list = SD4SOLPS.find_files_in_allowed_folders(
         sample_path, eqdsk_file="thereisntoneyet"
@@ -44,6 +59,29 @@ end
     @test endswith(b2time, "b2time.nc")
     @test length(gridspec) > 10
     @test endswith(gridspec, "gridspacedesc.yml")
+
+    # Test for sweeping 1D core profiles into 2D R,Z (or anyway evaluating them at any R,Z location)
+    dd = OMAS.dd()
+    eqdsk_file = splitdir(pathof(SD4SOLPS))[1] * "/../sample/geqdsk_iter_small_sample"
+    SD4SOLPS.geqdsk_to_imas(eqdsk_file, dd)
+    quantity = "electrons.density"
+    prof_time_idx = eq_time_idx = 1
+    resize!(dd.core_profiles.profiles_1d, prof_time_idx)
+    n = 101
+    rho_n = Array(LinRange(0, 1.0, n))
+    resize!(dd.core_profiles.profiles_1d[prof_time_idx].grid.rho_tor_norm, n)
+    resize!(dd.core_profiles.profiles_1d[prof_time_idx].electrons.density, n)
+    dd.core_profiles.profiles_1d[prof_time_idx].grid.rho_tor_norm = rho_n
+    dd.core_profiles.profiles_1d[prof_time_idx].electrons.density = make_test_profile(rho_n)
+    r_mag_axis = dd.equilibrium.time_slice[1].global_quantities.magnetic_axis.r
+    z_mag_axis = dd.equilibrium.time_slice[1].global_quantities.magnetic_axis.z
+    rg = r_mag_axis .* [0.85, 0.90, 0.95, 1.0, 1.05, 1.10, 1.15]
+    zg = z_mag_axis .+ (r_mag_axis .* [-0.05, -0.025, 0, 0.025, 0.05])
+    points = collect(Base.Iterators.product(rg, zg))
+    r = getfield.(points, 1)
+    z = getfield.(points, 2)
+    density_on_grid = SD4SOLPS.core_profile_2d(dd, prof_time_idx, eq_time_idx, quantity, r, z)
+    @test size(density_on_grid) = (length(rg), length(zg))
 end
 
 @testset "geqdsk_to_imas" begin

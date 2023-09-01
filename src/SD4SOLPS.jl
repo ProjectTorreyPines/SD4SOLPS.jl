@@ -121,6 +121,61 @@ function geqdsk_to_imas(eqdsk_file, dd; time_index=1)
 end
 
 """
+    core_profiles_2d(dd, time_idx, quantity, r, z)
+
+Reads a 1D core profile and flux map and returns a quantity at requested R,Z points
+dd: a data dictionary instance with equilibrium and core profile data loaded
+quantity: a string specifying the quantity to fetch
+r: R locations of desired output points / m
+z: Z locations of desired output points / m
+"""
+function core_profile_2d(dd, prof_time_idx, eq_time_idx, quantity, r, z)
+    prof = dd.core_profiles.profiles_1d[prof_time_idx]
+    rho_prof = prof.grid.rho_tor_norm
+    quantity_fields = split(quantity, ".")
+    p = prof
+    for field in quantity_fields
+        p = getproperty(p, Symbol(field))
+    end
+    eqt = dd.equilibrium.time_slice[eq_time_idx]
+    p1 = eqt.profiles_1d
+    p2 = eqt.profiles_2d[1]
+    gq = eqt.global_quantities
+    psi_a = gq.psi_axis
+    psi_b = gq.psi_boundary
+    rhon_eq = p1.rho_tor_norm
+    psi_eq = p1.psi
+    psin_eq = (psi_eq .- psi_a) ./ (psi_b - psi_a)
+    psirz = p2.psi
+    psinrz = (psirz .- psi_a) ./ (psi_b - psi_a)
+    r_eq = p2.grid.dim1
+    z_eq = p2.grid.dim2
+    extension = [1.0001, 1.1, 5]
+    # rho_N isn't defined on open flux surfaces, so it is extended by copying psi_N
+    psin_eq_ext = append!(psin_eq, extension)
+    rhon_eq_ext = append!(rhon_eq, extension)
+    neg_extension = [-5, -0.0001]  # I guess this would be at a PF coil or something?
+    psin_eq_ext = prepend!(psin_eq_ext, neg_extension)
+    rhon_eq_ext = prepend!(rhon_eq_ext, neg_extension)
+    rhonpsi = Interpolations.LinearInterpolation(psin_eq_ext, rhon_eq_ext)
+    rhonrz = rhonpsi.(psinrz)
+    rhoitp = Interpolations.interpolate((r_eq, z_eq), rhonrz, Interpolations.BSpline(Interpolations.Linear()))
+    rho_at_requested_points = rhoitp(r, z)
+    rho_truncated = copy(rho_at_requested_points)
+    rho_truncated[rho_truncated .> 1.0] = 1.0
+    return Interpolations.LinearInterpolation(rho_prof, p)(rho_truncated)
+
+    # println(typeof(rhonrz))
+    # println(typeof(rho_prof))
+    # println(typeof(p))
+    # itp = Interpolations.LinearInterpolation(rho_prof, p)(rho_truncated)
+    # # itp = Interpolations.extrapolate(itp, 0.0)
+    # print(typeof(itp))
+    # quantity_rz = itp.(rhonrz)
+    # return Interpolations.LinearInterpolation((r_eq, z_eq), quantity_rz)(r, z)
+end
+
+"""
     preparation()
 
 Gathers SOLPS and EFIT files and loads them into IMAS structure. Extrapolates
