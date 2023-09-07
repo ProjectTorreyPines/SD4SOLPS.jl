@@ -81,7 +81,7 @@ end
     r = getfield.(points, 1)
     z = getfield.(points, 2)
     density_on_grid = SD4SOLPS.core_profile_2d(dd, prof_time_idx, eq_time_idx, quantity, r, z)
-    @test size(density_on_grid) = (length(rg), length(zg))
+    @test size(density_on_grid) == (length(rg), length(zg))
 end
 
 @testset "geqdsk_to_imas" begin

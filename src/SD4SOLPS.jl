@@ -45,13 +45,13 @@ function find_files_in_allowed_folders(input_dirs...; eqdsk_file, recursive=true
     return output_files
 end
 
-function geqdsk_to_imas(eqdsk_file, dd; time_index=1)
-    """
-        geqdsk_to_imas()
+"""
+    geqdsk_to_imas()
 
-    Transfers the equilibrium reconstruction in an EFIT-style gEQDSK file into
-    the IMAS DD structure.
-    """
+Transfers the equilibrium reconstruction in an EFIT-style gEQDSK file into
+the IMAS DD structure.
+"""
+function geqdsk_to_imas(eqdsk_file, dd; time_index=1)
     # https://github.com/JuliaFusion/EFIT.jl/blob/master/src/io.jl
     g = EFIT.readg(eqdsk_file)
     # Copying ideas from OMFIT: omfit/omfit_classes/omfit_eqdsk.py / to_omas()
@@ -157,22 +157,33 @@ function core_profile_2d(dd, prof_time_idx, eq_time_idx, quantity, r, z)
     neg_extension = [-5, -0.0001]  # I guess this would be at a PF coil or something?
     psin_eq_ext = prepend!(psin_eq_ext, neg_extension)
     rhon_eq_ext = prepend!(rhon_eq_ext, neg_extension)
-    rhonpsi = Interpolations.LinearInterpolation(psin_eq_ext, rhon_eq_ext)
-    rhonrz = rhonpsi.(psinrz)
-    rhoitp = Interpolations.interpolate((r_eq, z_eq), rhonrz, Interpolations.BSpline(Interpolations.Linear()))
-    rho_at_requested_points = rhoitp(r, z)
-    rho_truncated = copy(rho_at_requested_points)
-    rho_truncated[rho_truncated .> 1.0] = 1.0
-    return Interpolations.LinearInterpolation(rho_prof, p)(rho_truncated)
 
-    # println(typeof(rhonrz))
-    # println(typeof(rho_prof))
-    # println(typeof(p))
-    # itp = Interpolations.LinearInterpolation(rho_prof, p)(rho_truncated)
-    # # itp = Interpolations.extrapolate(itp, 0.0)
-    # print(typeof(itp))
-    # quantity_rz = itp.(rhonrz)
-    # return Interpolations.LinearInterpolation((r_eq, z_eq), quantity_rz)(r, z)
+    rho_prof_ext = append!(rho_prof, extension)
+    p_ext = append!(p, zeros(size(extension)))
+    rho_prof_ext = prepend!(rho_prof_ext, neg_extension)
+    p_ext = prepend!(p_ext, zeros(size(neg_extension)))
+
+    # Data are set up and ready to process
+
+    # EDGE PROFILES (the input data):
+    # rho_prof_ext: rho_N values associated with the profile of some quantity
+    # p_ext : profile of some quantity vs. rho_prof
+
+    # EQUILBRIUM (the connection from rho to R,Z via psi):
+    # psin_eq_ext : 1D array of psi_N values that corresponds to rhon_eq_ext
+    # rhon_eq_ext : 1D array of rho_N values that corresponds to psin_eq_ext --> connects rho to everything else via psi
+    # psinrz : 2D array of psi_N values that corresponds to r_eq and z_eq
+    # r_eq and z_eq : 1D coordinate arrays that correspond to psinrz
+
+    # OUTPUT INSTRUCTIONS:
+    # r and z : coordinates of output points where values of p are desired
+
+    psi_at_requested_points = Interpolations.LinearInterpolation((r_eq, z_eq), psinrz).(r, z)
+    rhonpsi = Interpolations.LinearInterpolation(psin_eq_ext, rhon_eq_ext)
+    rho_at_requested_points = rhonpsi.(psi_at_requested_points)
+    itp = Interpolations.LinearInterpolation(rho_prof, p)
+    p_at_requested_points = itp.(rho_at_requested_points)
+    return p_at_requested_points
 end
 
 """
