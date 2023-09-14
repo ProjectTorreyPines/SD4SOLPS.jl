@@ -6,8 +6,8 @@ deps:
     url: git@github.com:ProjectTorreyPines/TestSamples.git
     rev_lock: b07a173b451279474a0d3a86e2853085a418a867
 outs:
-- md5: 0b684c2735b97d804f36817ed4c48ca0.dir
-  size: 263834911
-  nfiles: 29
+- md5: 348777428464b9fab4f602cd7462af32.dir
+  size: 288003089
+  nfiles: 32
   hash: md5
   path: ITER_Lore_2296_00000
