@@ -65,14 +65,22 @@ function fill_in_extrapolated_core_profile(dd::OMAS.dd, quantity_name::String)
     midplane_subset = SOLPS2IMAS.get_grid_subset_with_index(dd.edge_profiles.grid_ggd[ggd_idx], 11)
     
     if length(midplane_subset.element) < 1
-        println("Midplane subset length was ", length(midplane_subset.element), ". Unacceptable.")
-        return
+        throw(ArgumentError(string(
+            "Midplane subset length was ", length(midplane_subset.element),
+            ". Unacceptable data in data dictionary."
+        )))
     end
     if length(cell_subset.element) < 1
-        println("Cell subset length was ", length(cell_subset.element), ". Unacceptable.")
-        return
+        throw(ArgumentError(string(
+            "Cell subset length was ", length(cell_subset.element),
+            ". Unacceptable data in data dictionary."
+        )))
     end
 
+    nt = 1
+    if length(dd.core_profiles.profiles_1d) < nt
+        resize!(dd.core_profiles.profiles_1d, nt)
+    end
     it = 1
     eq_it = 1
     # quantity_in_cells = SOLPS2IMAS.val_obj(dd.edge_profiles.ggd[it], quantity_name, ggd_idx)
@@ -95,19 +103,38 @@ function fill_in_extrapolated_core_profile(dd::OMAS.dd, quantity_name::String)
     midplane_cell_centers = GGDUtils.get_subset_centers(space, midplane_subset)
     r = [midplane_cell_centers[i][1] for i in 1:length(midplane_cell_centers)]
     z = [midplane_cell_centers[i][2] for i in 1:length(midplane_cell_centers)]
-    println(midplane_cell_centers)
+    if length(r) != length(quantity)
+        throw(DimensionMismatch(string(
+            "Number of cell center coordinates (", length(r),
+            ") does not match number of cell values (", length(quantity),
+            ") in the midplane subset."
+        )))
+    end
     eq_idx = 1
     r_eq = dd.equilibrium.time_slice[eq_it].profiles_2d[eq_idx].grid.dim1
     z_eq = dd.equilibrium.time_slice[eq_it].profiles_2d[eq_idx].grid.dim2
     rho1_eq = dd.equilibrium.time_slice[eq_it].profiles_1d.rho_tor_norm
-    psi1_eq = dd.equilibrium.time_slice[eq_it].profiles_1d.psi
-    psi2_eq = dd.equilibrium.time_slice[eq_it].profiles_2d[eq_idx].psi
-    println(size(psi2_eq), ", ", size(r_eq), size(z_eq))
-    psi_for_quantity = Interpolations.LinearInterpolation((z_eq, r_eq), psi2_eq).(z, r)
+    psia = dd.equilibrium.time_slice[eq_it].global_quantities.psi_axis
+    psib = dd.equilibrium.time_slice[eq_it].global_quantities.psi_boundary
+    psi1_eq = (dd.equilibrium.time_slice[eq_it].profiles_1d.psi .- psia) ./ (psib - psia)
+    psi2_eq = (dd.equilibrium.time_slice[eq_it].profiles_2d[eq_idx].psi .- psia) ./ (psib - psia)
+    println(size(psi2_eq), ", ", size(r_eq), ", ", size(z_eq))
+    rzpi = Interpolations.LinearInterpolation((z_eq, r_eq), psi2_eq)
+    in_bounds = (r .< maximum(r_eq)) .& (r .> minimum(r_eq)) .& (z .> minimum(z_eq)) .& (z .< maximum(z_eq))
+    println(in_bounds)
+    psi_for_quantity = 10.0 .+ zeros(length(r))
+    psi_for_quantity[in_bounds] = rzpi.(z[in_bounds], r[in_bounds])
     println(length(psi1_eq), ", ", length(rho1_eq))
-    rho_for_quantity = Interpolations.LinearInterpolation(psi1_eq, rho1_eq).(psi_for_quantity)
+    rho_for_quantity = copy(psi_for_quantity)
+    in_bounds = psi_for_quantity .<= 1.0
+    rho_for_quantity[in_bounds] = Interpolations.LinearInterpolation(psi1_eq, rho1_eq).(psi_for_quantity[in_bounds])
     
+    if length(dd.core_profiles.profiles_1d[it].grid.rho_tor_norm) == 0
+        resize!(dd.core_profiles.profiles_1d[it].grid.rho_tor_norm, 201)
+        dd.core_profiles.profiles_1d[it].grid.rho_tor_norm = collect(LinRange(0, 1, 201))
+    end
     rho_core = dd.core_profiles.profiles_1d[it].grid.rho_tor_norm
+    Interpolations.deduplicate_knots!(rho_for_quantity)
     quantity_core = Interpolations.LinearInterpolation(rho_for_quantity, quantity).(rho_core)
     parent = dd.core_profiles.profiles_1d[it]
     tags = split(quantity_name, ".")
