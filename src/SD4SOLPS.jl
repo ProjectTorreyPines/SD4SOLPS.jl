@@ -22,8 +22,9 @@ about the SOLPS case. Returns a list of filenames with complete paths.
 Example:
 SD4SOLPS.find_files_in_allowed_folders("<your samples folder>/D3D_Ma_184833_03600", eqdsk_file="g184833.03600")
 """
-function find_files_in_allowed_folders(input_dirs...; eqdsk_file, recursive=true)
-    files = ["b2fgmtry", "b2time.nc", "gridspacedesc.yml", eqdsk_file]
+function find_files_in_allowed_folders(input_dirs...; eqdsk_file, recursive=true, allow_reduced_versions=false)
+    files = ["b2fgmtry", "b2time.nc", "b2mn.dat", "gridspacedesc.yml", eqdsk_file]
+    reduced_files = ["b2fgmtry_red", "b2time_red.nc", "b2mn.dat", "gridspacedesc.yml", eqdsk_file]
     output_files = fill("", length(files))
     if recursive
         dirs = []
@@ -36,8 +37,12 @@ function find_files_in_allowed_folders(input_dirs...; eqdsk_file, recursive=true
     for i in 1:length(files)
         for dir in dirs
             file = dir * "/" * files[i]
+            reduced_file = dir * "/" * reduced_files[i]
             if isfile(file)
                 output_files[i] = file
+                break
+            elseif isfile(reduced_file)
+                output_files[i] = reduced_file
                 break
             end
         end
