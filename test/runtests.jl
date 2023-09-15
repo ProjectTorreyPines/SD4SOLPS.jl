@@ -38,25 +38,58 @@ end
 # end
 
 @testset "core_profile_extension" begin
+    # Just the basic profile extrapolator
     edge_rho = Array(LinRange(0.88, 1.0, 18))
     edge_quantity = make_test_profile(edge_rho)
     output_rho = Array(LinRange(0, 1.0, 201))
     output_quantity = SD4SOLPS.extrapolate_core(edge_rho, edge_quantity, output_rho)
     @test length(output_quantity) == length(output_rho)
+
+    # The full workflow
+    sample_path = splitdir(pathof(SD4SOLPS))[1] * "/../sample/ITER_Lore_2296_00000/extended_output"
+    sample_path2 = splitdir(pathof(SD4SOLPS))[1] * "/../sample/ITER_Lore_2296_00000/baserun"
+    sample_path3 = splitdir(pathof(SD4SOLPS))[1] * "/../sample/ITER_Lore_2296_00000/run_restart"
+    sample_path4 = splitdir(pathof(SOLPS2IMAS))[1] * "/../samples"
+
+    # Requires dvc pull before the full samples will be loaded
+    # Sorry, the minimal samples are too minimal for this one.
+    file_list = SD4SOLPS.find_files_in_allowed_folders(
+        sample_path, sample_path2, sample_path3, sample_path4,
+        eqdsk_file="thereisntoneyet",
+        allow_reduced_versions=false,
+    )
+    b2fgmtry, b2time, b2mn, gridspec, eqdsk = file_list
+    eqdsk = splitdir(pathof(SD4SOLPS))[1] * "/../sample/ITER_Lore_2296_00000/EQDSK/Baseline2008-li0.70.x4.mod3.eqdsk"
+    println(b2fgmtry)
+    println(b2time)
+    println(b2mn)
+    println(gridspec)
+    println(eqdsk)
+    # If these files don't exist, complete the DVC sample setup and try again
+    @test isfile(b2fgmtry)
+    @test isfile(b2time)
+    @test isfile(b2mn)
+    @test isfile(gridspec)
+    @test isfile(eqdsk)
+    dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time, gridspec, b2mn)    
+    SD4SOLPS.geqdsk_to_imas(eqdsk, dd)
+    SD4SOLPS.fill_in_extrapolated_core_profile(dd, "electrons.density")
 end
 
 @testset "utilities" begin
     # Test for finding files in allowed folders
     sample_path = splitdir(pathof(SOLPS2IMAS))[1] * "/../samples/"
     file_list = SD4SOLPS.find_files_in_allowed_folders(
-        sample_path, eqdsk_file="thereisntoneyet"
+        sample_path, eqdsk_file="thereisntoneyet", allow_reduced_versions
     )
-    @test length(file_list) == 4
-    b2fgmtry, b2time, gridspec, eqdsk = file_list
+    @test length(file_list) == 5
+    b2fgmtry, b2time, b2mn, gridspec, eqdsk = file_list
     @test length(b2fgmtry) > 10
-    @test endswith(b2fgmtry, "b2fgmtry")
+    @test endswith(b2fgmtry, "b2fgmtry_red")
     @test length(b2time) > 10
-    @test endswith(b2time, "b2time.nc")
+    @test endswith(b2time, "b2time_red.nc")
+    @test length(b2mn) > 10
+    @test endswith(b2mn, "b2mn.dat")
     @test length(gridspec) > 10
     @test endswith(gridspec, "gridspacedesc.yml")
 
