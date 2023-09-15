@@ -8,8 +8,10 @@ import Interpolations
 
 export find_files_in_allowed_folders
 export geqdsk_to_imas
+export add_rho_to_equilibrium!
 
 include("$(@__DIR__)/supersize_profile.jl")
+include("$(@__DIR__)/repair_eq.jl")
 
 greet() = print("Hello World!")
 

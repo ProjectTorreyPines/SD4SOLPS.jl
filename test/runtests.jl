@@ -59,7 +59,7 @@ end
         allow_reduced_versions=false,
     )
     b2fgmtry, b2time, b2mn, gridspec, eqdsk = file_list
-    eqdsk = splitdir(pathof(SD4SOLPS))[1] * "/../sample/ITER_Lore_2296_00000/EQDSK/Baseline2008-li0.70.x4.mod3.eqdsk"
+    eqdsk = splitdir(pathof(SD4SOLPS))[1] * "/../sample/ITER_Lore_2296_00000/EQDSK/Baseline2008-li0.70.x4.mod2.eqdsk"
     println(b2fgmtry)
     println(b2time)
     println(b2mn)
@@ -73,6 +73,18 @@ end
     @test isfile(eqdsk)
     dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time, gridspec, b2mn)    
     SD4SOLPS.geqdsk_to_imas(eqdsk, dd)
+    rho = dd.equilibrium.time_slice[1].profiles_1d.rho_tor_norm
+    
+    if length(rho) < 1
+        missing_rho = true
+    elseif maximum(rho) == 0.0
+        missing_rho = true
+    else
+        missing_rho = false
+    end
+    if missing_rho
+        SD4SOLPS.add_rho_to_equilibrium!(dd)
+    end
     SD4SOLPS.fill_in_extrapolated_core_profile(dd, "electrons.density")
 end
 
@@ -115,6 +127,25 @@ end
     z = getfield.(points, 2)
     density_on_grid = SD4SOLPS.core_profile_2d(dd, prof_time_idx, eq_time_idx, quantity, r, z)
     @test size(density_on_grid) == (length(rg), length(zg))
+end
+
+@testset "repair_eq" begin
+    # Prepare sample
+    dd = OMAS.dd()
+    eqdsk = splitdir(pathof(SD4SOLPS))[1] * "/../sample/geqdsk_iter_small_sample"
+    SD4SOLPS.geqdsk_to_imas(eqdsk, dd)
+    # Make sure rho is missing
+    nt = length(dd.equilibrium.time_slice)
+    for it = 1:nt
+        eqt = dd.equilibrium.time_slice[it]
+        eqt.profiles_1d.rho_tor_norm = Vector{Float64}()
+    end
+    # Add rho
+    SD4SOLPS.add_rho_to_equilibrium!(dd)
+    # Check
+    rho = dd.equilibrium.time_slice[1].profiles_1d.rho_tor_norm
+    @test length(rho) > 10
+    @test maximum(rho) > 0
 end
 
 @testset "geqdsk_to_imas" begin
