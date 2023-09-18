@@ -204,15 +204,16 @@ Gathers SOLPS and EFIT files and loads them into IMAS structure. Extrapolates
 profiles as needed to get a complete picture.
 """
 function preparation(eqdsk_file, dirs...)
-    b2fgmtry, b2time, gridspec, eqdsk = find_files_in_allowed_folders(
+    b2fgmtry, b2time, b2mn, gridspec, eqdsk = find_files_in_allowed_folders(
         dirs..., eqdsk_file=eqdsk_file
     )
     println("Found source files:")
     println("    b2fgmtry = ", b2fgmtry)
     println("    b2time = ", b2time)
+    println("    b2mn.dat = ", b2mn)
     println("    gridspec = ", gridspec)
     println("    eqdsk = ", eqdsk)
-    dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time, gridspec)
+    dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time, gridspec, b2mn)
     geqdsk_to_imas(eqdsk, dd)
     println("Loaded data into IMAS DD")
     return dd
