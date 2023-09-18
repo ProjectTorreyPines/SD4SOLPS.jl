@@ -8,11 +8,6 @@ import Interpolations
 import NumericalIntegration
 import GGDUtils
 
-function testytesty()
-    println("yeah, the function ran")
-    return nothing
-end
-
 """
     extrapolate_core(edge_rho, edge_quantity, rho_output)
 
@@ -52,10 +47,23 @@ function extrapolate_core(edge_rho, edge_quantity, rho_output)
 
     output_profile = Array{Float64}(undef, length(rho_output))
     output_profile[rho_output .< rf] = q_extend[rho_output .< rf]
-    output_profile[rho_output .>= rf] = Interpolations.LinearInterpolation(edge_rho, edge_quantity)(rho_output[rho_output .>= rf])
+    output_profile[rho_output .>= rf] = Interpolations.LinearInterpolation(edge_rho, edge_quantity).(rho_output[rho_output .>= rf])
     return output_profile
 end
 
+"""
+    function fill_in_extrapolated_core_profile(dd::OMAS.dd, quantity_name::String)
+
+This function accepts a DD that should be populated with equilibrium and edge_profiles
+as well as a request for a quantity to extrapolate into the core. It then maps edge_profiles
+data to rho, calls the function that performs the extrapolation (which is not a simple linear
+extrapolation but has some trickery to attempt to make a somewhat convincing profile shape),
+and writes the result to core_profiles. This involves a bunch of interpolations and stuff.
+
+dd: an IMAS/OMAS data dictionary
+quantity_name: the name of a quantity in edge_profiles.profiles_2d and core_profiles.profiles_1d,
+    such as "electrons.density"
+"""
 function fill_in_extrapolated_core_profile(dd::OMAS.dd, quantity_name::String)
     println("hey hey hey")
     ggd_idx = 1
@@ -100,6 +108,7 @@ function fill_in_extrapolated_core_profile(dd::OMAS.dd, quantity_name::String)
     GGDUtils.project_prop_on_subset!(quantity, cell_subset, midplane_subset, space=space)
     # Now quantity is at the outboard midplane
 
+    # Get the rho values to go with the midplane quantity values
     midplane_cell_centers = GGDUtils.get_subset_centers(space, midplane_subset)
     r = [midplane_cell_centers[i][1] for i in 1:length(midplane_cell_centers)]
     z = [midplane_cell_centers[i][2] for i in 1:length(midplane_cell_centers)]
@@ -129,13 +138,16 @@ function fill_in_extrapolated_core_profile(dd::OMAS.dd, quantity_name::String)
     in_bounds = psi_for_quantity .<= 1.0
     rho_for_quantity[in_bounds] = Interpolations.LinearInterpolation(psi1_eq, rho1_eq).(psi_for_quantity[in_bounds])
     
+    # Make sure the output 1D rho grid exists; create it if needed
     if length(dd.core_profiles.profiles_1d[it].grid.rho_tor_norm) == 0
         resize!(dd.core_profiles.profiles_1d[it].grid.rho_tor_norm, 201)
+        # If you don't like this default, then you should write grid.rho_tor_norm before calling this function.
         dd.core_profiles.profiles_1d[it].grid.rho_tor_norm = collect(LinRange(0, 1, 201))
     end
     rho_core = dd.core_profiles.profiles_1d[it].grid.rho_tor_norm
-    Interpolations.deduplicate_knots!(rho_for_quantity)
-    quantity_core = Interpolations.LinearInterpolation(rho_for_quantity, quantity).(rho_core)
+
+    # Finally, we're ready to call the extrapolation function and write the result
+    quantity_core = extrapolate_core(rho_for_quantity, quantity, rho_core)
     parent = dd.core_profiles.profiles_1d[it]
     tags = split(quantity_name, ".")
     for tag in tags[1:end-1]
