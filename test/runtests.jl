@@ -102,6 +102,15 @@ end
     @test length(quantity) > 0
     @test length(quantity) == length(rho_core)
 end
+
+@testset "edge_profile_extension" begin
+    n_edge = 47
+    n_outer_prof = 13
+    quantity_edge = [collect(LinRange(2.0, 75.0, 7)); collect(LinRange(75.0, 98.3, 17))]
+    quantity_edge = [quantity_edge; reverse(quantity_edge)[2:end]]
+    gradient_edge = [collect(LinRange(-1, -100, 7)); collect(LinRange(-100, -350, 17))]
+    gradient_edge = [gradient_edge; reverse(gradient_edge)[2:end]]
+    psin_out = collect(LinRange(1.0, 1.25, n_outer_prof+1))[2:end]
 end
 
 @testset "utilities" begin

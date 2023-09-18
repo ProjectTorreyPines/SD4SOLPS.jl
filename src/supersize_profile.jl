@@ -159,3 +159,29 @@ function fill_in_extrapolated_core_profile(dd::OMAS.dd, quantity_name::String)
     end
     setproperty!(parent, Symbol(tags[end]), quantity_core)
 end
+
+"""
+    function extrapolate_edge_exp(quantity_edge::Vector{Float64}, dqdpsi::Vector{Float64}, psin_out::Vector{Float64})
+
+Exponential decay version of edge profile extrapolation. Should work well for
+many quantities, including Te and ne. If the exponential profile has no background
+offset, then its amplitude and scale length can be completely defined by matching
+the quantity value and first derivative at the edge of the mesh.
+
+quantity_edge: values of some physics quantity in cells along the outer edge of the mesh
+dqdpsi: Gradient of the quantity vs. psi, aligned perpendicular to the row of cells
+    being used.
+psin_out: Normalized psi values along a vector orthogonal to the row of cells along the edge.
+    These psi_N values should be outside of the mesh (because the quantity is already known in the mesh)
+    The output will be a matrix.
+"""
+function extrapolate_edge_exp(
+    quantity_edge::Vector{Float64},
+    dqdpsi::Vector{Float64},
+    psin_out::Vector{Float64},
+)
+    x = psin_out - 1.0
+    lambda = - quantity_edge / dqdpsi
+    q0 = quantity_edge ./ exp(-x'./lambda)
+    return y0 * exp(-x ./ lambda)
+end
