@@ -9,6 +9,31 @@ problems should be fixed properly.
 import Contour
 import Statistics
 
+export add_rho_to_equilibrium!
+export check_rho_1d
+
+"""
+    function check_rho_1d()
+
+Checks to see if rho exists and is valid in the equilibrium 1d profiles
+"""
+function check_rho_1d(dd::OMAS.dd; time_slice::Int64=1)
+    rho = dd.equilibrium.time_slice[time_slice].profiles_1d.rho_tor_norm
+    if length(rho) < 1
+        rho_okay = false
+    elseif maximum(rho) == 0.0
+        rho_okay = false
+    else
+        rho_okay = true
+    end
+    return rho_okay
+end
+
+"""
+    function add_rho_to_equilibrium(dd:OMAS.dd)
+
+Adds equilibrium rho profile to the DD
+"""
 function add_rho_to_equilibrium!(dd::OMAS.dd)
     nt = length(dd.equilibrium.time_slice)
     if nt < 1
@@ -48,13 +73,22 @@ function add_rho_to_equilibrium!(dd::OMAS.dd)
                 println("Eq looks okay ", (length(req), length(zeq)), ", ", size(psi2), ". ", (size(req), size(zeq)))
             end
             for j = 1:n
-                c = Contour.contour(req, zeq, psi2, psi[j])
-                clines = Contour.lines(c)
-                line_avg_height = [Statistics.mean([clines[i].vertices[v][2] for v in 1:length(clines[i].vertices)]) for i in 1:length(clines)]
-                cl = clines[argmin(abs.(line_avg_height))]
-                # Now just do the 2D integral of B within the area of the contour
-                r = [cl.vertices[v][1] for v in 1:length(cl.vertices)]
-                z = [cl.vertices[v][2] for v in 1:length(cl.vertices)]
+                contour_level = psi[j]
+                if j == n
+                    # The last contour has a X point if everything is lined up right, and that could get
+                    # weird. We want a contour that only takes the core boundary part of the separatrix.
+                    r = eqt.boundary.outline.r
+                    z = eqt.boundary.outline.z
+                else
+                    c = Contour.contour(req, zeq, psi2, contour_level)
+                    clines = Contour.lines(c)
+                    line_avg_height = [Statistics.mean([clines[i].vertices[v][2] for v in 1:length(clines[i].vertices)]) for i in 1:length(clines)]
+                    cl = clines[argmin(abs.(line_avg_height))]
+                    # Now just do the 2D integral of B within the area of the contour
+                    r = [cl.vertices[v][1] for v in 1:length(cl.vertices)]
+                    z = [cl.vertices[v][2] for v in 1:length(cl.vertices)]
+                end
+                # Get the upper and lower halves of the path, each going from rmin to rmax.
                 rmin = minimum(r)
                 rmax = maximum(r)
                 irmin = argmin(r)

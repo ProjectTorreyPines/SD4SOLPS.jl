@@ -76,16 +76,10 @@ end
     SD4SOLPS.geqdsk_to_imas(eqdsk, dd)
     rho = dd.equilibrium.time_slice[1].profiles_1d.rho_tor_norm
     
-    if length(rho) < 1
-        missing_rho = true
-    elseif maximum(rho) == 0.0
-        missing_rho = true
-    else
-        missing_rho = false
-    end
-    if missing_rho
+    if !SD4SOLPS.check_rho_1d(dd, time_slice=1)
         SD4SOLPS.add_rho_to_equilibrium!(dd)
         rho = dd.equilibrium.time_slice[1].profiles_1d.rho_tor_norm
+        println("Repaired missing rho for core profile test")
     end
     # Sample is ready
 
@@ -100,11 +94,11 @@ end
     @test length(dd.core_profiles.profiles_1d) > 0
     core_prof = dd.core_profiles.profiles_1d[test_slice_idx]
     tags = split(quantity_name, ".")
-    quantity = dd.core_profiles.profiles_1d[it]
+    quantity = dd.core_profiles.profiles_1d[test_slice_idx]
     for tag in tags
         quantity = getproperty(quantity, Symbol(tag))
     end
-    rho_core = dd.core_profiles.profiles_1d[it].grid.rho_tor_norm
+    rho_core = dd.core_profiles.profiles_1d[test_slice_idx].grid.rho_tor_norm
     @test length(quantity) > 0
     @test length(quantity) == length(rho_core)
 end
@@ -147,6 +141,10 @@ end
     points = collect(Base.Iterators.product(rg, zg))
     r = getfield.(points, 1)
     z = getfield.(points, 2)
+    if !SD4SOLPS.check_rho_1d(dd, time_slice=eq_time_idx)
+        SD4SOLPS.add_rho_to_equilibrium!(dd)
+        println("DD was repaired (rho added) for core 2d utility test")
+    end
     density_on_grid = SD4SOLPS.core_profile_2d(dd, prof_time_idx, eq_time_idx, quantity, r, z)
     @test size(density_on_grid) == (length(rg), length(zg))
 end

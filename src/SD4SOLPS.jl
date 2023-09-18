@@ -8,7 +8,6 @@ import Interpolations
 
 export find_files_in_allowed_folders
 export geqdsk_to_imas
-export add_rho_to_equilibrium!
 
 include("$(@__DIR__)/supersize_profile.jl")
 include("$(@__DIR__)/repair_eq.jl")
@@ -137,6 +136,9 @@ r: R locations of desired output points / m
 z: Z locations of desired output points / m
 """
 function core_profile_2d(dd, prof_time_idx, eq_time_idx, quantity, r, z)
+    if !check_rho_1d(dd, time_slice=eq_time_idx)
+        throw(ArgumentError("Equilibrium rho profile in input DD was missing."))
+    end
     prof = dd.core_profiles.profiles_1d[prof_time_idx]
     rho_prof = prof.grid.rho_tor_norm
     quantity_fields = split(quantity, ".")
@@ -159,11 +161,13 @@ function core_profile_2d(dd, prof_time_idx, eq_time_idx, quantity, r, z)
     z_eq = p2.grid.dim2
     extension = [1.0001, 1.1, 5]
     # rho_N isn't defined on open flux surfaces, so it is extended by copying psi_N
-    psin_eq_ext = append!(psin_eq, extension)
-    rhon_eq_ext = append!(rhon_eq, extension)
+    psin_eq_ext = copy(psin_eq)
+    append!(psin_eq_ext, extension)
+    rhon_eq_ext = copy(rhon_eq)
+    append!(rhon_eq_ext, extension)
     neg_extension = [-5, -0.0001]  # I guess this would be at a PF coil or something?
-    psin_eq_ext = prepend!(psin_eq_ext, neg_extension)
-    rhon_eq_ext = prepend!(rhon_eq_ext, neg_extension)
+    prepend!(psin_eq_ext, neg_extension)
+    prepend!(rhon_eq_ext, neg_extension)
 
     rho_prof_ext = append!(rho_prof, extension)
     p_ext = append!(p, zeros(size(extension)))

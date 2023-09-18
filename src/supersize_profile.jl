@@ -136,6 +136,10 @@ function fill_in_extrapolated_core_profile(dd::OMAS.dd, quantity_name::String)
     println(length(psi1_eq), ", ", length(rho1_eq))
     rho_for_quantity = copy(psi_for_quantity)
     in_bounds = psi_for_quantity .<= 1.0
+    dpsi = diff(psi1_eq)
+    drho = diff(rho1_eq)
+    prepend!(dpsi, [0.0])
+    prepend!(drho, [0.0])
     rho_for_quantity[in_bounds] = Interpolations.LinearInterpolation(psi1_eq, rho1_eq).(psi_for_quantity[in_bounds])
     
     # Make sure the output 1D rho grid exists; create it if needed
