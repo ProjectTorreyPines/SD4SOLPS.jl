@@ -90,36 +90,38 @@ end
     # Sample is ready
 
     # Test settings
-    quantity = "electrons.density"
+    quantity_name = "electrons.density"
     test_slice_idx = 1
 
     # Do it
-    SD4SOLPS.fill_in_extrapolated_core_profile(dd, quantity)
+    SD4SOLPS.fill_in_extrapolated_core_profile(dd, quantity_name)
 
     # Inspect results
     @test length(dd.core_profiles.profiles_1d) > 0
     core_prof = dd.core_profiles.profiles_1d[test_slice_idx]
     tags = split(quantity_name, ".")
-    quantity = dd.edge_profiles.ggd[it]
+    quantity = dd.core_profiles.profiles_1d[it]
     for tag in tags
         quantity = getproperty(quantity, Symbol(tag))
     end
+    rho_core = dd.core_profiles.profiles_1d[it].grid.rho_tor_norm
     @test length(quantity) > 0
-    @test length(quantity) == length(rho)
+    @test length(quantity) == length(rho_core)
+end
 end
 
 @testset "utilities" begin
     # Test for finding files in allowed folders
     sample_path = splitdir(pathof(SOLPS2IMAS))[1] * "/../samples/"
     file_list = SD4SOLPS.find_files_in_allowed_folders(
-        sample_path, eqdsk_file="thereisntoneyet", allow_reduced_versions
+        sample_path, eqdsk_file="thereisntoneyet", allow_reduced_versions=true,
     )
     @test length(file_list) == 5
     b2fgmtry, b2time, b2mn, gridspec, eqdsk = file_list
     @test length(b2fgmtry) > 10
-    @test endswith(b2fgmtry, "b2fgmtry_red")
+    @test endswith(b2fgmtry, "b2fgmtry_red") | endswith(b2fgmtry, "b2fgmtry")
     @test length(b2time) > 10
-    @test endswith(b2time, "b2time_red.nc")
+    @test endswith(b2time, "b2time_red.nc") | endswith(b2fgmtry, "b2time.nc")
     @test length(b2mn) > 10
     @test endswith(b2mn, "b2mn.dat")
     @test length(gridspec) > 10

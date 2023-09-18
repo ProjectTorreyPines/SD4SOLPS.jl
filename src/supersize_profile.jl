@@ -93,23 +93,23 @@ function fill_in_extrapolated_core_profile(dd::OMAS.dd, quantity_name::String)
     eq_it = 1
     # quantity_in_cells = SOLPS2IMAS.val_obj(dd.edge_profiles.ggd[it], quantity_name, ggd_idx)
     tags = split(quantity_name, ".")
-    quantity = dd.edge_profiles.ggd[it]
+    quantity_str = dd.edge_profiles.ggd[it]
     for tag in tags
-        quantity = getproperty(quantity, Symbol(tag))
+        quantity_str = getproperty(quantity_str, Symbol(tag))
     end
     # Quantity is in cells now
     cell_subset_idx = 5
-    nqv = length(quantity[cell_subset_idx].values)
+    nqv = length(quantity_str[cell_subset_idx].values)
     if nqv < 1
         println("Quantity ", quantity_name, " has ", nqv, " elements in subset ", cell_subset_idx, ". Unacceptable.")
         return
     end
-    quantity[cell_subset_idx].grid_subset_index = cell_subset_idx
-    GGDUtils.project_prop_on_subset!(quantity, cell_subset, midplane_subset, space=space)
+    quantity_str[cell_subset_idx].grid_subset_index = cell_subset_idx
+    midplane_cell_centers, quantity = GGDUtils.project_prop_on_subset!(quantity_str, cell_subset, midplane_subset, space=space)
     # Now quantity is at the outboard midplane
 
     # Get the rho values to go with the midplane quantity values
-    midplane_cell_centers = GGDUtils.get_subset_centers(space, midplane_subset)
+    # midplane_cell_centers = GGDUtils.get_subset_centers(space, midplane_subset)  # Not needed; done by project_prop_on_subset
     r = [midplane_cell_centers[i][1] for i in 1:length(midplane_cell_centers)]
     z = [midplane_cell_centers[i][2] for i in 1:length(midplane_cell_centers)]
     if length(r) != length(quantity)
