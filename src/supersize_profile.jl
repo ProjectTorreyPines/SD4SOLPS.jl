@@ -37,7 +37,7 @@ function extrapolate_core(edge_rho, edge_quantity, rho_output)
     rmid = rf / 2.0
     rped_enforce = rf - 0.08
     gped_enforce = rf + (gmid - gf) / (rmid - rf) * rped_enforce
-    gped_max = maximum(grad) / 10.
+    gped_max = maximum(grad) / 10.0
     gped_enforce = minimum([abs(gped_enforce), abs(gped_max)]) * sign(gf)
 
     gg = [0, gmid, gped_enforce, gf]

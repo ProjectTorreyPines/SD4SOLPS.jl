@@ -38,14 +38,15 @@ end
 # end
 
 @testset "core_profile_extension" begin
-    # Just the basic profile extrapolator
+    # Just the basic profile extrapolator ------------------
     edge_rho = Array(LinRange(0.88, 1.0, 18))
     edge_quantity = make_test_profile(edge_rho)
     output_rho = Array(LinRange(0, 1.0, 201))
     output_quantity = SD4SOLPS.extrapolate_core(edge_rho, edge_quantity, output_rho)
     @test length(output_quantity) == length(output_rho)
 
-    # The full workflow
+    # The full workflow --------------------------------------
+    # Setup sample DD
     sample_path = splitdir(pathof(SD4SOLPS))[1] * "/../sample/ITER_Lore_2296_00000/extended_output"
     sample_path2 = splitdir(pathof(SD4SOLPS))[1] * "/../sample/ITER_Lore_2296_00000/baserun"
     sample_path3 = splitdir(pathof(SD4SOLPS))[1] * "/../sample/ITER_Lore_2296_00000/run_restart"
@@ -84,8 +85,27 @@ end
     end
     if missing_rho
         SD4SOLPS.add_rho_to_equilibrium!(dd)
+        rho = dd.equilibrium.time_slice[1].profiles_1d.rho_tor_norm
     end
-    SD4SOLPS.fill_in_extrapolated_core_profile(dd, "electrons.density")
+    # Sample is ready
+
+    # Test settings
+    quantity = "electrons.density"
+    test_slice_idx = 1
+
+    # Do it
+    SD4SOLPS.fill_in_extrapolated_core_profile(dd, quantity)
+
+    # Inspect results
+    @test length(dd.core_profiles.profiles_1d) > 0
+    core_prof = dd.core_profiles.profiles_1d[test_slice_idx]
+    tags = split(quantity_name, ".")
+    quantity = dd.edge_profiles.ggd[it]
+    for tag in tags
+        quantity = getproperty(quantity, Symbol(tag))
+    end
+    @test length(quantity) > 0
+    @test length(quantity) == length(rho)
 end
 
 @testset "utilities" begin
