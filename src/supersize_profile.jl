@@ -105,7 +105,7 @@ function fill_in_extrapolated_core_profile(dd::OMAS.dd, quantity_name::String)
         return
     end
     quantity_str[cell_subset_idx].grid_subset_index = cell_subset_idx
-    midplane_cell_centers, quantity = GGDUtils.project_prop_on_subset!(quantity_str, cell_subset, midplane_subset, space=space)
+    midplane_cell_centers, quantity = GGDUtils.project_prop_on_subset!(quantity_str, cell_subset, midplane_subset, space)
     # Now quantity is at the outboard midplane
 
     # Get the rho values to go with the midplane quantity values
