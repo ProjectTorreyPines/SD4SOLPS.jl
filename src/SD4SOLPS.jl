@@ -203,7 +203,7 @@ end
 Gathers SOLPS and EFIT files and loads them into IMAS structure. Extrapolates
 profiles as needed to get a complete picture.
 """
-function preparation(eqdsk_file, dirs...)
+function preparation(eqdsk_file, dirs...; core_method::String="simple", edge_method::String="simple")
     b2fgmtry, b2time, b2mn, gridspec, eqdsk = find_files_in_allowed_folders(
         dirs..., eqdsk_file=eqdsk_file
     )
@@ -213,12 +213,19 @@ function preparation(eqdsk_file, dirs...)
     println("    b2mn.dat = ", b2mn)
     println("    gridspec = ", gridspec)
     println("    eqdsk = ", eqdsk)
+    
     dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time, gridspec, b2mn)
     geqdsk_to_imas(eqdsk, dd)
     println("Loaded input data into IMAS DD")
-    fill_in_extrapolated_core_profile(dd, "electrons.density")
-    fill_in_extrapolated_core_profile(dd, "electrons.temperature")
+    
+    fill_in_extrapolated_core_profile!(dd, "electrons.density", method=core_method)
+    fill_in_extrapolated_core_profile!(dd, "electrons.temperature", method=core_method)
+    # ... more profiles here as they become available in b2time
     println("Extrapolated core profiles")
+
+    fill_in_extrapolated_edge_profile!(dd, "electrons.density", method=core_method)
+    # ... more profiles here
+    println("Extrapolated edge profiles (but not really (placeholder only))")
     return dd
 end
 

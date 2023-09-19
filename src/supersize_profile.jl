@@ -68,8 +68,12 @@ dd: an IMAS/OMAS data dictionary
 quantity_name: the name of a quantity in edge_profiles.profiles_2d and core_profiles.profiles_1d,
     such as "electrons.density"
 """
-function fill_in_extrapolated_core_profile(dd::OMAS.dd, quantity_name::String)
-    println("hey hey hey")
+function fill_in_extrapolated_core_profile!(
+    dd::OMAS.dd,
+    quantity_name::String;
+    method::String="simple",
+    eq_time_idx::Int64=1,
+)
     ggd_idx = 1
     space_number = 1
     space = dd.edge_profiles.grid_ggd[ggd_idx].space[space_number]
@@ -94,7 +98,6 @@ function fill_in_extrapolated_core_profile(dd::OMAS.dd, quantity_name::String)
         resize!(dd.core_profiles.profiles_1d, nt)
     end
     it = 1
-    eq_it = 1
     # quantity_in_cells = SOLPS2IMAS.val_obj(dd.edge_profiles.ggd[it], quantity_name, ggd_idx)
     tags = split(quantity_name, ".")
     quantity_str = dd.edge_profiles.ggd[it]
@@ -124,13 +127,13 @@ function fill_in_extrapolated_core_profile(dd::OMAS.dd, quantity_name::String)
         )))
     end
     eq_idx = 1
-    r_eq = dd.equilibrium.time_slice[eq_it].profiles_2d[eq_idx].grid.dim1
-    z_eq = dd.equilibrium.time_slice[eq_it].profiles_2d[eq_idx].grid.dim2
-    rho1_eq = dd.equilibrium.time_slice[eq_it].profiles_1d.rho_tor_norm
-    psia = dd.equilibrium.time_slice[eq_it].global_quantities.psi_axis
-    psib = dd.equilibrium.time_slice[eq_it].global_quantities.psi_boundary
-    psi1_eq = (dd.equilibrium.time_slice[eq_it].profiles_1d.psi .- psia) ./ (psib - psia)
-    psi2_eq = (dd.equilibrium.time_slice[eq_it].profiles_2d[eq_idx].psi .- psia) ./ (psib - psia)
+    r_eq = dd.equilibrium.time_slice[eq_time_idx].profiles_2d[eq_idx].grid.dim1
+    z_eq = dd.equilibrium.time_slice[eq_time_idx].profiles_2d[eq_idx].grid.dim2
+    rho1_eq = dd.equilibrium.time_slice[eq_time_idx].profiles_1d.rho_tor_norm
+    psia = dd.equilibrium.time_slice[eq_time_idx].global_quantities.psi_axis
+    psib = dd.equilibrium.time_slice[eq_time_idx].global_quantities.psi_boundary
+    psi1_eq = (dd.equilibrium.time_slice[eq_time_idx].profiles_1d.psi .- psia) ./ (psib - psia)
+    psi2_eq = (dd.equilibrium.time_slice[eq_time_idx].profiles_2d[eq_idx].psi .- psia) ./ (psib - psia)
     println(size(psi2_eq), ", ", size(r_eq), ", ", size(z_eq))
     rzpi = Interpolations.LinearInterpolation((z_eq, r_eq), psi2_eq)
     in_bounds = (r .< maximum(r_eq)) .& (r .> minimum(r_eq)) .& (z .> minimum(z_eq)) .& (z .< maximum(z_eq))
@@ -155,7 +158,13 @@ function fill_in_extrapolated_core_profile(dd::OMAS.dd, quantity_name::String)
     rho_core = dd.core_profiles.profiles_1d[it].grid.rho_tor_norm
 
     # Finally, we're ready to call the extrapolation function and write the result
-    quantity_core = extrapolate_core(rho_for_quantity, quantity, rho_core)
+    if method == "simple"
+        quantity_core = extrapolate_core(rho_for_quantity, quantity, rho_core)
+    else
+        throw(ArgumentError(string(
+            "Unrecognized extraplation method: ", method,
+        )))
+    end
     parent = dd.core_profiles.profiles_1d[it]
     tags = split(quantity_name, ".")
     for tag in tags[1:end-1]
@@ -252,4 +261,45 @@ function mesh_psi_spacing(dd::OMAS.dd; eq_time_idx::Int64=1)
     psin = psin_mesh[ii]
     dpsin = psin[end] - psin[end-1]
     return dpsin
+end
+
+
+"""
+    fill_in_extrapolated_edge_profile!(dd::OMAS.dd, quantity_name::String; method::String="simple")
+
+JUST A PLACEHOLDER FOR NOW. DOESN'T ACTUALLY WORK YET.
+"""
+function fill_in_extrapolated_edge_profile!(
+    dd::OMAS.dd,
+    quantity_name::String;
+    method::String="simple",
+    eq_time_idx::Int64=1,
+)
+    # Inspect input
+    if length(dd.equilibrium.time_slice) < eq_time_idx
+        throw(ArgumentError(string(
+            "DD equilibrium does not have enough time slices: ",
+            length(dd.equilibrium.time_slice), " slices were present but slice index ",
+            eq_time_idx, " was requested.",
+        )))
+    end
+    bad_ggd = (length(dd.edge_profiles.grid_ggd) < 1)
+    if bad_ggd
+        throw(ArgumentError(string(
+            "Invalid GGD data."
+        )))
+    end
+
+    if method == "simple"
+        println("THERE IS NOT ACTUALLY AN EDGE EXTRAPOLATION METHOD YET.")
+        println("THIS IS A PLACEHOLDER SO THE REST OF THE WORKFLOW CAN BE SET UP.")
+        # In this case, there's a good chance that we'll need a few different classes
+        # of extrapolation techniques for different quantities as the may behave
+        # differently.
+    else
+        throw(ArgumentError(string(
+            "Unrecognized extraplation method: ", method,
+        )))
+    end
+
 end

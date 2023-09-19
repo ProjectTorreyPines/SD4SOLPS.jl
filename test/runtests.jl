@@ -93,7 +93,7 @@ end
     test_slice_idx = 1
 
     # Do it
-    SD4SOLPS.fill_in_extrapolated_core_profile(dd, quantity_name)
+    SD4SOLPS.fill_in_extrapolated_core_profile!(dd, quantity_name)
 
     # Inspect results
     @test length(dd.core_profiles.profiles_1d) > 0
