@@ -37,16 +37,7 @@ end
 #     Plots.plot!(edge_rho, edge_quantity, marker='.')
 # end
 
-@testset "core_profile_extension" begin
-    # Just the basic profile extrapolator ------------------
-    edge_rho = Array(LinRange(0.88, 1.0, 18))
-    edge_quantity = make_test_profile(edge_rho)
-    output_rho = Array(LinRange(0, 1.0, 201))
-    output_quantity = SD4SOLPS.extrapolate_core(edge_rho, edge_quantity, output_rho)
-    @test length(output_quantity) == length(output_rho)
-
-    # The full workflow --------------------------------------
-    # Setup sample DD
+function define_default_sample_set()
     sample_path = splitdir(pathof(SD4SOLPS))[1] * "/../sample/ITER_Lore_2296_00000/extended_output"
     sample_path2 = splitdir(pathof(SD4SOLPS))[1] * "/../sample/ITER_Lore_2296_00000/baserun"
     sample_path3 = splitdir(pathof(SD4SOLPS))[1] * "/../sample/ITER_Lore_2296_00000/run_restart"
@@ -61,6 +52,20 @@ end
     )
     b2fgmtry, b2time, b2mn, gridspec, eqdsk = file_list
     eqdsk = splitdir(pathof(SD4SOLPS))[1] * "/../sample/ITER_Lore_2296_00000/EQDSK/Baseline2008-li0.70.x4.mod2.eqdsk"
+    return b2fgmtry, b2time, b2mn, gridspec, eqdsk
+end
+
+@testset "core_profile_extension" begin
+    # Just the basic profile extrapolator ------------------
+    edge_rho = Array(LinRange(0.88, 1.0, 18))
+    edge_quantity = make_test_profile(edge_rho)
+    output_rho = Array(LinRange(0, 1.0, 201))
+    output_quantity = SD4SOLPS.extrapolate_core(edge_rho, edge_quantity, output_rho)
+    @test length(output_quantity) == length(output_rho)
+
+    # The full workflow --------------------------------------
+    # Setup sample DD
+    b2fgmtry, b2time, b2mn, gridspec, eqdsk = define_default_sample_set()
     println(b2fgmtry)
     println(b2time)
     println(b2mn)

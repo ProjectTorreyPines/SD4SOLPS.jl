@@ -8,6 +8,10 @@ import Interpolations
 import NumericalIntegration
 import GGDUtils
 
+export extrapolate_core
+export fill_in_extrapolated_core_profile
+export mesh_psi_spacing
+
 """
     extrapolate_core(edge_rho, edge_quantity, rho_output)
 
