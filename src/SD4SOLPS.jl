@@ -203,7 +203,14 @@ end
 Gathers SOLPS and EFIT files and loads them into IMAS structure. Extrapolates
 profiles as needed to get a complete picture.
 """
-function preparation(eqdsk_file, dirs...; core_method::String="simple", edge_method::String="simple")
+function preparation(
+    eqdsk_file,
+    dirs...;
+    core_method::String="simple",
+    edge_method::String="simple",
+    filename::String="sd_input_data",
+    output_format::String="json",
+)
     b2fgmtry, b2time, b2mn, gridspec, eqdsk = find_files_in_allowed_folders(
         dirs..., eqdsk_file=eqdsk_file
     )
@@ -226,6 +233,12 @@ function preparation(eqdsk_file, dirs...; core_method::String="simple", edge_met
     fill_in_extrapolated_edge_profile!(dd, "electrons.density", method=core_method)
     # ... more profiles here
     println("Extrapolated edge profiles (but not really (placeholder only))")
+
+    if output_format == "json"
+        OMAS.imas2json(dd, filename * ".json")
+    else
+        throw(ArgumentError(string("Unrecognized output format: ", output_format)))
+    end
     return dd
 end
 

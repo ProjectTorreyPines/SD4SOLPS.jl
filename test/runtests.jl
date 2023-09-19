@@ -239,10 +239,24 @@ end
         splitdir(pathof(SD4SOLPS))[1] * "/../sample/",    
         splitdir(pathof(SOLPS2IMAS))[1] * "/../samples/",
     ]
-    dd = SD4SOLPS.preparation(eqdsk_file, sample_paths...)
+    core_method = "simple"
+    edge_method = "simple"
+    filename = splitdir(pathof(SD4SOLPS))[1] * "/../sd_input_data"
+    output_format = "json"
+    dd = SD4SOLPS.preparation(
+        eqdsk_file,
+        sample_paths...,
+        core_method=core_method,
+        edge_method=edge_method,
+        filename=filename,
+        output_format=output_format,
+    )
+    out_file = filename * "." * output_format
     p2 = dd.equilibrium.time_slice[1].profiles_2d[1]
     psirz = p2.psi
     r = p2.grid.dim1
     z = p2.grid.dim2
     @test size(psirz) == (length(r), length(z))
+    println(out_file)
+    @test isfile(out_file)
 end
