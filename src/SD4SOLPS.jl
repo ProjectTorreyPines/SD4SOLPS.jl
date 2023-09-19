@@ -215,7 +215,10 @@ function preparation(eqdsk_file, dirs...)
     println("    eqdsk = ", eqdsk)
     dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time, gridspec, b2mn)
     geqdsk_to_imas(eqdsk, dd)
-    println("Loaded data into IMAS DD")
+    println("Loaded input data into IMAS DD")
+    fill_in_extrapolated_core_profile(dd, "electrons.density")
+    fill_in_extrapolated_core_profile(dd, "electrons.temperature")
+    println("Extrapolated core profiles")
     return dd
 end
 

@@ -236,8 +236,8 @@ end
 @testset "preparation" begin
     eqdsk_file = "geqdsk_iter_small_sample"
     sample_paths = [
+        splitdir(pathof(SD4SOLPS))[1] * "/../sample/",    
         splitdir(pathof(SOLPS2IMAS))[1] * "/../samples/",
-        splitdir(pathof(SD4SOLPS))[1] * "/../sample/",
     ]
     dd = SD4SOLPS.preparation(eqdsk_file, sample_paths...)
     p2 = dd.equilibrium.time_slice[1].profiles_2d[1]
