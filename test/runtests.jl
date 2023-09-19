@@ -109,6 +109,13 @@ end
 end
 
 @testset "edge_profile_extension" begin
+    # Test for getting mesh spacing
+    b2fgmtry, b2time, b2mn, gridspec, eqdsk = define_default_sample_set()
+    dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time, gridspec, b2mn)    
+    SD4SOLPS.geqdsk_to_imas(eqdsk, dd)
+    dpsin = SD4SOLPS.mesh_psi_spacing(dd)
+    @test dpsin > 0.0
+
     n_edge = 47
     n_outer_prof = 13
     quantity_edge = [collect(LinRange(2.0, 75.0, 7)); collect(LinRange(75.0, 98.3, 17))]

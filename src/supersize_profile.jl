@@ -189,3 +189,67 @@ function extrapolate_edge_exp(
     q0 = quantity_edge ./ exp(-x'./lambda)
     return y0 * exp(-x ./ lambda)
 end
+
+"""
+    function mesh_psi_spacing(dd::OMAS.dd; eq_time_idx::Int64=1)
+
+Inspects the mesh to see how far apart faces are in psi_N.
+Requires that GGD and equilibrium are populated.
+
+dd: a data dictionary instance with required data loaded into it
+eq_time_idx: index of the equilibrium time slice to use. For a typical SOLPS run,
+        the SOLPS mesh will be based on the equilibrium reconstruction at a single time,
+        so the DD associated with the SOLPS run only needs one equilibrium time slice
+        to be loaded. However, one could combine the complete equilibrium time series
+        with the SOLPS run and then have to specify which slice of the equilibrium
+        corresponds to the SOLPS mesh.
+"""
+function mesh_psi_spacing(dd::OMAS.dd; eq_time_idx::Int64=1)
+    # Inspect input
+    if length(dd.equilibrium.time_slice) < eq_time_idx
+        throw(ArgumentError(string(
+            "DD equilibrium does not have enough time slices: ",
+            length(dd.equilibrium.time_slice), " slices were present but slice index ",
+            eq_time_idx, " was requested.",
+        )))
+    end
+    bad_ggd = (length(dd.edge_profiles.grid_ggd) < 1)
+    if bad_ggd
+        throw(ArgumentError(string(
+            "Invalid GGD data."
+        )))
+    end
+
+    # Get flux map
+    eq_idx = 1  # Most cases won't have need for more than one of these, as far as I know
+    eqt = dd.equilibrium.time_slice[eq_time_idx]
+    p2 = eqt.profiles_2d[eq_idx]
+    r_eq = p2.grid.dim1
+    z_eq = p2.grid.dim2
+    psi = p2.psi
+    psia = eqt.global_quantities.psi_axis
+    psib = eqt.global_quantities.psi_boundary
+    psin_eq = (psi .- psia) ./ (psib - psia)
+    rzpi = Interpolations.LinearInterpolation((z_eq, r_eq), psin_eq)
+    println(minimum(r_eq), ", ", maximum(r_eq))
+    println(minimum(z_eq), ", ", maximum(z_eq))
+
+    # Get a row of cells. Since the mesh should be aligned to the flux surfaces,
+    # it shouldn't matter which row is used, although the divertor rows might be
+    # weird. So use the outboard midplane. That's always a solid choice.
+    ggd_idx = 1
+    space_number = 1
+    space = dd.edge_profiles.grid_ggd[ggd_idx].space[space_number]
+    midplane_subset = SOLPS2IMAS.get_grid_subset_with_index(dd.edge_profiles.grid_ggd[ggd_idx], 11)
+    midplane_cell_centers = GGDUtils.get_subset_centers(space, midplane_subset)
+    r_mesh = [midplane_cell_centers[i][1] for i in 1:length(midplane_cell_centers)]
+    z_mesh = [midplane_cell_centers[i][2] for i in 1:length(midplane_cell_centers)]
+    println(minimum(r_mesh), ", ", maximum(r_mesh))
+    println(minimum(z_mesh), ", ", maximum(z_mesh))
+    psin_mesh = rzpi.(z_mesh, r_mesh)
+    # This should come out sorted, but with GGD, who knows.
+    ii = sortperm(psin_mesh)
+    psin = psin_mesh[ii]
+    dpsin = psin[end] - psin[end-1]
+    return dpsin
+end
