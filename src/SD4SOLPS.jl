@@ -1,9 +1,9 @@
 module SD4SOLPS
 
-import OMAS
-import SOLPS2IMAS
-import EFIT
-import Interpolations
+using OMAS: OMAS
+using SOLPS2IMAS: SOLPS2IMAS
+using EFIT: EFIT
+using Interpolations: Interpolations
 #import GGDUtils
 
 export find_files_in_allowed_folders
@@ -21,22 +21,32 @@ Searches a list of allowed folders for a set of filenames that will provide info
 about the SOLPS case. Returns a list of filenames with complete paths.
 
 Example:
-SD4SOLPS.find_files_in_allowed_folders("<your samples folder>/D3D_Ma_184833_03600", eqdsk_file="g184833.03600")
+SD4SOLPS.find_files_in_allowed_folders(
+"<your samples folder>/D3D_Ma_184833_03600",
+eqdsk_file="g184833.03600",
+)
 """
-function find_files_in_allowed_folders(input_dirs...; eqdsk_file, recursive=true, allow_reduced_versions=false)
+function find_files_in_allowed_folders(
+    input_dirs...;
+    eqdsk_file,
+    recursive=true,
+    allow_reduced_versions=false,
+)
     files = ["b2fgmtry", "b2time.nc", "b2mn.dat", "gridspacedesc.yml", eqdsk_file]
-    reduced_files = ["b2fgmtry_red", "b2time_red.nc", "b2mn.dat", "gridspacedesc.yml", eqdsk_file]
+    reduced_files =
+        ["b2fgmtry_red", "b2time_red.nc", "b2mn.dat", "gridspacedesc.yml", eqdsk_file]
     output_files = fill("", length(files))
     if recursive
         dirs = []
-        for dir in input_dirs
-            dirs = append!(dirs, [subdir[1] for subdir in [item for item in walkdir(dir)]])
+        for dir ∈ input_dirs
+            dirs =
+                append!(dirs, [subdir[1] for subdir ∈ [item for item ∈ walkdir(dir)]])
         end
     else
         dirs = input_dirs
     end
-    for i in 1:length(files)
-        for dir in dirs
+    for i ∈ 1:length(files)
+        for dir ∈ dirs
             file = dir * "/" * files[i]
             reduced_file = dir * "/" * reduced_files[i]
             if isfile(file)
@@ -87,7 +97,8 @@ function geqdsk_to_imas(eqdsk_file, dd; time_index=1)
     p1.f_df_dpsi = g.ffprim
     p1.dpressure_dpsi = g.pprime
     p1.q = g.qpsi
-    if hasproperty(g, :rhovn)  # rhovn is not in the original EFIT.jl but is added on a branch
+    if hasproperty(g, :rhovn)
+        # rhovn is not in the original EFIT.jl but is added on a branch
         p1.rho_tor_norm = g.rhovn
     end
 
@@ -122,8 +133,7 @@ function geqdsk_to_imas(eqdsk_file, dd; time_index=1)
     limiter.type.description = "first wall"
     resize!(limiter.unit, 1)
     limiter.unit[1].outline.r = g.rlim
-    limiter.unit[1].outline.z = g.zlim
-
+    return limiter.unit[1].outline.z = g.zlim
 end
 
 """
@@ -136,14 +146,14 @@ r: R locations of desired output points / m
 z: Z locations of desired output points / m
 """
 function core_profile_2d(dd, prof_time_idx, eq_time_idx, quantity, r, z)
-    if !check_rho_1d(dd, time_slice=eq_time_idx)
+    if !check_rho_1d(dd; time_slice=eq_time_idx)
         throw(ArgumentError("Equilibrium rho profile in input DD was missing."))
     end
     prof = dd.core_profiles.profiles_1d[prof_time_idx]
     rho_prof = prof.grid.rho_tor_norm
     quantity_fields = split(quantity, ".")
     p = prof
-    for field in quantity_fields
+    for field ∈ quantity_fields
         p = getproperty(p, Symbol(field))
     end
     eqt = dd.equilibrium.time_slice[eq_time_idx]
@@ -182,14 +192,16 @@ function core_profile_2d(dd, prof_time_idx, eq_time_idx, quantity, r, z)
 
     # EQUILBRIUM (the connection from rho to R,Z via psi):
     # psin_eq_ext : 1D array of psi_N values that corresponds to rhon_eq_ext
-    # rhon_eq_ext : 1D array of rho_N values that corresponds to psin_eq_ext --> connects rho to everything else via psi
+    # rhon_eq_ext : 1D array of rho_N values that corresponds to psin_eq_ext
+    #       --> connects rho to everything else via psi
     # psinrz : 2D array of psi_N values that corresponds to r_eq and z_eq
     # r_eq and z_eq : 1D coordinate arrays that correspond to psinrz
 
     # OUTPUT INSTRUCTIONS:
     # r and z : coordinates of output points where values of p are desired
 
-    psi_at_requested_points = Interpolations.LinearInterpolation((r_eq, z_eq), psinrz).(r, z)
+    psi_at_requested_points =
+        Interpolations.LinearInterpolation((r_eq, z_eq), psinrz).(r, z)
     rhonpsi = Interpolations.LinearInterpolation(psin_eq_ext, rhon_eq_ext)
     rho_at_requested_points = rhonpsi.(psi_at_requested_points)
     itp = Interpolations.LinearInterpolation(rho_prof, p)
@@ -211,26 +223,25 @@ function preparation(
     filename::String="sd_input_data",
     output_format::String="json",
 )
-    b2fgmtry, b2time, b2mn, gridspec, eqdsk = find_files_in_allowed_folders(
-        dirs..., eqdsk_file=eqdsk_file
-    )
+    b2fgmtry, b2time, b2mn, gridspec, eqdsk =
+        find_files_in_allowed_folders(dirs...; eqdsk_file=eqdsk_file)
     println("Found source files:")
     println("    b2fgmtry = ", b2fgmtry)
     println("    b2time = ", b2time)
     println("    b2mn.dat = ", b2mn)
     println("    gridspec = ", gridspec)
     println("    eqdsk = ", eqdsk)
-    
+
     dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time, gridspec, b2mn)
     geqdsk_to_imas(eqdsk, dd)
     println("Loaded input data into IMAS DD")
-    
-    fill_in_extrapolated_core_profile!(dd, "electrons.density", method=core_method)
-    fill_in_extrapolated_core_profile!(dd, "electrons.temperature", method=core_method)
+
+    fill_in_extrapolated_core_profile!(dd, "electrons.density"; method=core_method)
+    fill_in_extrapolated_core_profile!(dd, "electrons.temperature"; method=core_method)
     # ... more profiles here as they become available in b2time
     println("Extrapolated core profiles")
 
-    fill_in_extrapolated_edge_profile!(dd, "electrons.density", method=core_method)
+    fill_in_extrapolated_edge_profile!(dd, "electrons.density"; method=core_method)
     # ... more profiles here
     println("Extrapolated edge profiles (but not really (placeholder only))")
 

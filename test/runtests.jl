@@ -1,7 +1,7 @@
-import SD4SOLPS
-import SOLPS2IMAS
-import OMAS
-import EFIT
+using SD4SOLPS: SD4SOLPS
+using SOLPS2IMAS: SOLPS2IMAS
+using OMAS: OMAS
+using EFIT: EFIT
 using Plots
 using Test
 
@@ -12,20 +12,29 @@ Makes a modified tanh profile based on the formula from:
 Groebner, et al., Nucl. Fusion 41, 1789 (2001) 10.1088/0029-5515/41/12/306
 
 x: position basis. The output will be a function of this coordinate.
-    Could be psi_N or R or Z or whatever, as long as sym and hwid are
-    specified in terms of the same coordinate.
-    Defaults are given in terms of psi_N.
+Could be psi_N or R or Z or whatever, as long as sym and hwid are
+specified in terms of the same coordinate.
+Defaults are given in terms of psi_N.
 sym: location of the tanh symmetry point
 hwid: half width of the tanh
 offset: value at the foot of the tanh / SOL value
 pedestal: value at the top of the tanh / pedestal value
 alpha: interior slope
 """
-function make_test_profile(x; sym=0.9657, hwid=0.05421, offset=0.0953, pedestal=3.58901, alpha=0.005)
+function make_test_profile(
+    x;
+    sym=0.9657,
+    hwid=0.05421,
+    offset=0.0953,
+    pedestal=3.58901,
+    alpha=0.005,
+)
     z = (sym .- x) ./ hwid
     amplitude = (pedestal - offset) / 2.0
     b = offset + amplitude
-    return b .+ amplitude .* ((1 .+ alpha .* z) .* exp.(z) .- exp.(.-z)) ./ (exp.(z) .+ exp.(.-z))
+    return b .+
+           amplitude .* ((1 .+ alpha .* z) .* exp.(z) .- exp.(.-z)) ./
+           (exp.(z) .+ exp.(.-z))
 end
 
 # function plot_test_profiles()
@@ -38,20 +47,26 @@ end
 # end
 
 function define_default_sample_set()
-    sample_path = splitdir(pathof(SD4SOLPS))[1] * "/../sample/ITER_Lore_2296_00000/extended_output"
-    sample_path2 = splitdir(pathof(SD4SOLPS))[1] * "/../sample/ITER_Lore_2296_00000/baserun"
-    sample_path3 = splitdir(pathof(SD4SOLPS))[1] * "/../sample/ITER_Lore_2296_00000/run_restart"
+    sample_path =
+        splitdir(pathof(SD4SOLPS))[1] *
+        "/../sample/ITER_Lore_2296_00000/extended_output"
+    sample_path2 =
+        splitdir(pathof(SD4SOLPS))[1] * "/../sample/ITER_Lore_2296_00000/baserun"
+    sample_path3 =
+        splitdir(pathof(SD4SOLPS))[1] * "/../sample/ITER_Lore_2296_00000/run_restart"
     sample_path4 = splitdir(pathof(SOLPS2IMAS))[1] * "/../samples"
 
     # Requires dvc pull before the full samples will be loaded
     # Sorry, the minimal samples are too minimal for this one.
     file_list = SD4SOLPS.find_files_in_allowed_folders(
-        sample_path, sample_path2, sample_path3, sample_path4,
+        sample_path, sample_path2, sample_path3, sample_path4;
         eqdsk_file="thereisntoneyet",
         allow_reduced_versions=false,
     )
     b2fgmtry, b2time, b2mn, gridspec, eqdsk = file_list
-    eqdsk = splitdir(pathof(SD4SOLPS))[1] * "/../sample/ITER_Lore_2296_00000/EQDSK/Baseline2008-li0.70.x4.mod2.eqdsk"
+    eqdsk =
+        splitdir(pathof(SD4SOLPS))[1] *
+        "/../sample/ITER_Lore_2296_00000/EQDSK/Baseline2008-li0.70.x4.mod2.eqdsk"
     return b2fgmtry, b2time, b2mn, gridspec, eqdsk
 end
 
@@ -77,11 +92,11 @@ end
     @test isfile(b2mn)
     @test isfile(gridspec)
     @test isfile(eqdsk)
-    dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time, gridspec, b2mn)    
+    dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time, gridspec, b2mn)
     SD4SOLPS.geqdsk_to_imas(eqdsk, dd)
     rho = dd.equilibrium.time_slice[1].profiles_1d.rho_tor_norm
-    
-    if !SD4SOLPS.check_rho_1d(dd, time_slice=1)
+
+    if !SD4SOLPS.check_rho_1d(dd; time_slice=1)
         SD4SOLPS.add_rho_to_equilibrium!(dd)
         rho = dd.equilibrium.time_slice[1].profiles_1d.rho_tor_norm
         println("Repaired missing rho for core profile test")
@@ -100,7 +115,7 @@ end
     core_prof = dd.core_profiles.profiles_1d[test_slice_idx]
     tags = split(quantity_name, ".")
     quantity = dd.core_profiles.profiles_1d[test_slice_idx]
-    for tag in tags
+    for tag ∈ tags
         quantity = getproperty(quantity, Symbol(tag))
     end
     rho_core = dd.core_profiles.profiles_1d[test_slice_idx].grid.rho_tor_norm
@@ -111,7 +126,7 @@ end
 @testset "edge_profile_extension" begin
     # Test for getting mesh spacing
     b2fgmtry, b2time, b2mn, gridspec, eqdsk = define_default_sample_set()
-    dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time, gridspec, b2mn)    
+    dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time, gridspec, b2mn)
     SD4SOLPS.geqdsk_to_imas(eqdsk, dd)
     dpsin = SD4SOLPS.mesh_psi_spacing(dd)
     @test dpsin > 0.0
@@ -122,14 +137,14 @@ end
     quantity_edge = [quantity_edge; reverse(quantity_edge)[2:end]]
     gradient_edge = [collect(LinRange(-1, -100, 7)); collect(LinRange(-100, -350, 17))]
     gradient_edge = [gradient_edge; reverse(gradient_edge)[2:end]]
-    psin_out = collect(LinRange(1.0, 1.25, n_outer_prof+1))[2:end]
+    psin_out = collect(LinRange(1.0, 1.25, n_outer_prof + 1))[2:end]
 end
 
 @testset "utilities" begin
     # Test for finding files in allowed folders
     sample_path = splitdir(pathof(SOLPS2IMAS))[1] * "/../samples/"
     file_list = SD4SOLPS.find_files_in_allowed_folders(
-        sample_path, eqdsk_file="thereisntoneyet", allow_reduced_versions=true,
+        sample_path; eqdsk_file="thereisntoneyet", allow_reduced_versions=true,
     )
     @test length(file_list) == 5
     b2fgmtry, b2time, b2mn, gridspec, eqdsk = file_list
@@ -142,7 +157,8 @@ end
     @test length(gridspec) > 10
     @test endswith(gridspec, "gridspacedesc.yml")
 
-    # Test for sweeping 1D core profiles into 2D R,Z (or anyway evaluating them at any R,Z location)
+    # Test for sweeping 1D core profiles into 2D R,Z
+    # (or anyway evaluating them at any R,Z location)
     dd = OMAS.dd()
     eqdsk_file = splitdir(pathof(SD4SOLPS))[1] * "/../sample/geqdsk_iter_small_sample"
     SD4SOLPS.geqdsk_to_imas(eqdsk_file, dd)
@@ -154,7 +170,8 @@ end
     resize!(dd.core_profiles.profiles_1d[prof_time_idx].grid.rho_tor_norm, n)
     resize!(dd.core_profiles.profiles_1d[prof_time_idx].electrons.density, n)
     dd.core_profiles.profiles_1d[prof_time_idx].grid.rho_tor_norm = rho_n
-    dd.core_profiles.profiles_1d[prof_time_idx].electrons.density = make_test_profile(rho_n)
+    dd.core_profiles.profiles_1d[prof_time_idx].electrons.density =
+        make_test_profile(rho_n)
     r_mag_axis = dd.equilibrium.time_slice[1].global_quantities.magnetic_axis.r
     z_mag_axis = dd.equilibrium.time_slice[1].global_quantities.magnetic_axis.z
     rg = r_mag_axis .* [0.85, 0.90, 0.95, 1.0, 1.05, 1.10, 1.15]
@@ -162,11 +179,12 @@ end
     points = collect(Base.Iterators.product(rg, zg))
     r = getfield.(points, 1)
     z = getfield.(points, 2)
-    if !SD4SOLPS.check_rho_1d(dd, time_slice=eq_time_idx)
+    if !SD4SOLPS.check_rho_1d(dd; time_slice=eq_time_idx)
         SD4SOLPS.add_rho_to_equilibrium!(dd)
         println("DD was repaired (rho added) for core 2d utility test")
     end
-    density_on_grid = SD4SOLPS.core_profile_2d(dd, prof_time_idx, eq_time_idx, quantity, r, z)
+    density_on_grid =
+        SD4SOLPS.core_profile_2d(dd, prof_time_idx, eq_time_idx, quantity, r, z)
     @test size(density_on_grid) == (length(rg), length(zg))
 end
 
@@ -177,7 +195,7 @@ end
     SD4SOLPS.geqdsk_to_imas(eqdsk, dd)
     # Make sure rho is missing
     nt = length(dd.equilibrium.time_slice)
-    for it = 1:nt
+    for it ∈ 1:nt
         eqt = dd.equilibrium.time_slice[it]
         eqt.profiles_1d.rho_tor_norm = Vector{Float64}()
     end
@@ -190,13 +208,14 @@ end
 end
 
 @testset "geqdsk_to_imas" begin
-    sample_files = (splitdir(pathof(SD4SOLPS))[1] * "/../sample/") .* [
-        "g184833.03600", "geqdsk_iter_small_sample"
-    ]
+    sample_files =
+        (splitdir(pathof(SD4SOLPS))[1] * "/../sample/") .* [
+            "g184833.03600", "geqdsk_iter_small_sample",
+        ]
     tslice = 1
-    for sample_file in sample_files
+    for sample_file ∈ sample_files
         dd = OMAS.dd()
-        SD4SOLPS.geqdsk_to_imas(sample_file, dd, time_index=tslice)
+        SD4SOLPS.geqdsk_to_imas(sample_file, dd; time_index=tslice)
         eqt = dd.equilibrium.time_slice[tslice]
 
         # global
@@ -236,7 +255,7 @@ end
 @testset "preparation" begin
     eqdsk_file = "geqdsk_iter_small_sample"
     sample_paths = [
-        splitdir(pathof(SD4SOLPS))[1] * "/../sample/",    
+        splitdir(pathof(SD4SOLPS))[1] * "/../sample/",
         splitdir(pathof(SOLPS2IMAS))[1] * "/../samples/",
     ]
     core_method = "simple"
@@ -245,7 +264,7 @@ end
     output_format = "json"
     dd = SD4SOLPS.preparation(
         eqdsk_file,
-        sample_paths...,
+        sample_paths...;
         core_method=core_method,
         edge_method=edge_method,
         filename=filename,
