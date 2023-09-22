@@ -1,10 +1,10 @@
-md5: fd0856e1e06a7ddab0b8e4aaddc170de
+md5: 377b6f3a1439c78e6a310739b4ca69d0
 frozen: true
 deps:
 - path: ITER_Lore_2296_00000
   repo:
-    url: git@github.com:ProjectTorreyPines/TestSamples.git
-    rev_lock: f905bd19e48bd54bc53416de9bbdaadda6654b9a
+    url: git@github.com:ProjectTorreyPines/SOLPSTestSamples.git
+    rev_lock: 35fd24298a4118eec6491dcd17d4e0ec97823e83
 outs:
 - md5: 48af1b920caaa6bc1788af8a36512638.dir
   size: 322802293

@@ -6,8 +6,8 @@ use this tool mainly for test cases, as a utility. For a real equilibrium,
 problems should be fixed properly.
 """
 
-import Contour
-import Statistics
+using Contour: Contour
+using Statistics: Statistics
 
 export add_rho_to_equilibrium!
 export check_rho_1d
@@ -40,7 +40,7 @@ function add_rho_to_equilibrium!(dd::OMAS.dd)
         println("No equilibrium time slices to work with; can't add rho")
         return
     end
-    for it = 1:nt
+    for it ∈ 1:nt
         eqt = dd.equilibrium.time_slice[it]
         b0 = dd.equilibrium.vacuum_toroidal_field.b0[it]
         r0 = dd.equilibrium.vacuum_toroidal_field.r0[it]
@@ -60,7 +60,9 @@ function add_rho_to_equilibrium!(dd::OMAS.dd)
             zeq = collect(eqt.profiles_2d[1].grid.dim2)
             if (length(req), length(zeq)) == size(psi2')
                 psi2 = Matrix(psi2')
-                println("transposed psi to make it compatible with r,z prior to contouring")
+                println(
+                    "transposed psi to make it compatible with r,z prior to contouring",
+                )
             end
             if (length(req), length(zeq)) != size(psi2)
                 println("Invalid equilibrium data. rho cannot be added.")
@@ -70,25 +72,38 @@ function add_rho_to_equilibrium!(dd::OMAS.dd)
                 println("    psi2d   : ", size(psi2))
                 return
             else
-                println("Eq looks okay ", (length(req), length(zeq)), ", ", size(psi2), ". ", (size(req), size(zeq)))
+                println(
+                    "Eq looks okay ",
+                    (length(req), length(zeq)),
+                    ", ",
+                    size(psi2),
+                    ". ",
+                    (size(req), size(zeq)),
+                )
             end
-            for j = 1:n
+            for j ∈ 1:n
                 contour_level = psi[j]
                 if j == n
-                    # The last contour has a X point if everything is lined up right, and that could get
-                    # weird. We want a contour that only takes the core boundary part of the separatrix.
+                    # The last contour has a X point if everything is lined up right,
+                    # and that could get weird. We want a contour that only takes the
+                    # core boundary part of the separatrix.
                     r = eqt.boundary.outline.r
                     z = eqt.boundary.outline.z
                 else
                     c = Contour.contour(req, zeq, psi2, contour_level)
                     clines = Contour.lines(c)
-                    line_avg_height = [Statistics.mean([clines[i].vertices[v][2] for v in 1:length(clines[i].vertices)]) for i in 1:length(clines)]
+                    line_avg_height = [
+                        Statistics.mean([
+                            clines[i].vertices[v][2] for
+                            v ∈ 1:length(clines[i].vertices)
+                        ]) for i ∈ 1:length(clines)
+                    ]
                     cl = clines[argmin(abs.(line_avg_height))]
                     # Now just do the 2D integral of B within the area of the contour
-                    r = [cl.vertices[v][1] for v in 1:length(cl.vertices)]
-                    z = [cl.vertices[v][2] for v in 1:length(cl.vertices)]
+                    r = [cl.vertices[v][1] for v ∈ 1:length(cl.vertices)]
+                    z = [cl.vertices[v][2] for v ∈ 1:length(cl.vertices)]
                 end
-                # Get the upper and lower halves of the path, each going from rmin to rmax.
+                # Get the upper & lower halves of the path, each going from rmin to rmax
                 rmin = minimum(r)
                 rmax = maximum(r)
                 irmin = argmin(r)
@@ -123,13 +138,17 @@ function add_rho_to_equilibrium!(dd::OMAS.dd)
                 z2i = Interpolations.LinearInterpolation(r2, z2)
                 rr = LinRange(rmin, rmax, 101)
                 rc = (rr[1:end-1] + rr[2:end]) / 2.0
-                integral_part_ = [log(rr[i+1]/rr[i]) * abs(z1i(rc[i]) - z2i(rc[i])) for i in 1:length(rc)]
+                integral_part_ = [
+                    log(rr[i+1] / rr[i]) * abs(z1i(rc[i]) - z2i(rc[i])) for
+                    i ∈ 1:length(rc)
+                ]
                 phi_ = r0 * b0 .* integral_part_
                 eqt.profiles_1d.phi[j] = sum(phi_)
             end
         end
         eqt.profiles_1d.rho_tor = sqrt.(eqt.profiles_1d.phi / (π * b0))
-        eqt.profiles_1d.rho_tor_norm = eqt.profiles_1d.rho_tor / eqt.profiles_1d.rho_tor[end]
+        eqt.profiles_1d.rho_tor_norm =
+            eqt.profiles_1d.rho_tor / eqt.profiles_1d.rho_tor[end]
     end
-    println("Rho has been added to the equilibrium")
+    return println("Rho has been added to the equilibrium")
 end
