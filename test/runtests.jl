@@ -4,6 +4,7 @@ using OMAS: OMAS
 using EFIT: EFIT
 using Plots
 using Test
+using Unitful: Unitful
 
 """
     make_test_profile()
@@ -68,6 +69,33 @@ function define_default_sample_set()
         splitdir(pathof(SD4SOLPS))[1] *
         "/../sample/ITER_Lore_2296_00000/EQDSK/Baseline2008-li0.70.x4.mod2.eqdsk"
     return b2fgmtry, b2time, b2mn, gridspec, eqdsk
+end
+
+@testset "lightweight_utilities" begin
+    # Gas unit converter
+    flow_tls = 40.63 * Unitful.Torr * Unitful.L / Unitful.s
+    flow_pam3 = SD4SOLPS.gas_unit_converter(flow_tls, "torr L s^-1", "Pa m^3 s^-1")
+    @test flow_pam3.val > 0.0
+    flow_molecules1 = SD4SOLPS.gas_unit_converter(
+        flow_tls,
+        "torr L s^-1",
+        "molecules s^-1";
+        temperature=293.15 * Unitful.K,
+    )
+    flow_molecules2 = SD4SOLPS.gas_unit_converter(
+        flow_tls,
+        "torr L s^-1",
+        "molecules s^-1";
+        temperature=300.0 * Unitful.K,
+    )
+    @test flow_molecules1 > flow_molecules2
+end
+
+@testset "actuator" begin
+    t = collect(LinRange(0, 2.0, 1001))
+    cmd = (t .> 1.0) * 1.55 + (t .> 1.5) * 0.93 + (t .> 1.8) * 0.25
+    flow = SD4SOLPS.model_gas_valve(t, cmd, "simple")
+    @test length(flow) == length(cmd)
 end
 
 @testset "core_profile_extension" begin
@@ -140,7 +168,7 @@ end
     psin_out = collect(LinRange(1.0, 1.25, n_outer_prof + 1))[2:end]
 end
 
-@testset "utilities" begin
+@testset "heavy_utilities" begin
     # Test for finding files in allowed folders
     sample_path = splitdir(pathof(SOLPS2IMAS))[1] * "/../samples/"
     file_list = SD4SOLPS.find_files_in_allowed_folders(
