@@ -1,0 +1,13 @@
+md5: fd0856e1e06a7ddab0b8e4aaddc170de
+frozen: true
+deps:
+- path: ITER_Lore_2296_00000
+  repo:
+    url: git@github.com:ProjectTorreyPines/TestSamples.git
+    rev_lock: f905bd19e48bd54bc53416de9bbdaadda6654b9a
+outs:
+- md5: 48af1b920caaa6bc1788af8a36512638.dir
+  size: 322802293
+  nfiles: 42
+  hash: md5
+  path: ITER_Lore_2296_00000
