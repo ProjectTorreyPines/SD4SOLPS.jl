@@ -24,7 +24,7 @@ function gas_unit_converter(
     pam3_to_molecules =
         Unitful.J / (temperature * BoltzmannConstant) / (Unitful.Pa * Unitful.m^3)
     torrl_to_molecules = torrl_to_pam3 * pam3_to_molecules
-    atoms_per_molecule = Dict(
+    electrons_per_molecule = Dict(
         "H" => 1 * 2,  # Assumed to mean H2. How would you even puff a bunch of H1.
         "H2" => 1 * 2,
         "D" => 1 * 2,
@@ -42,30 +42,29 @@ function gas_unit_converter(
         "Kr" => 36,
         "Xe" => 54,
     )
-    atoms_per_molecule[species]
 
     factor_to_get_molecules_s = Dict(
         "torr L s^-1" => torrl_to_molecules,
         "molecules s^-1" => 1.0,
         "Pa m^3 s^-1" => pam3_to_molecules,
-        "el s^-1" => 1.0 / atoms_per_molecule[species],
-        "A" => ElementaryCharge / atoms_per_molecule[species],
+        "el s^-1" => 1.0 / electrons_per_molecule[species],
+        "A" => ElementaryCharge / electrons_per_molecule[species],
     )
     factor_to_get_molecules = Dict(
         "torr L" => torrl_to_molecules,
         "molecules" => 1.0,
         "Pa m^3" => pam3_to_molecules,
-        "el" => 1.0 / atoms_per_molecule[species],
-        "C" => ElementaryCharge / atoms_per_molecule[species],
+        "el" => 1.0 / electrons_per_molecule[species],
+        "C" => ElementaryCharge / electrons_per_molecule[species],
     )
-    if haskey(factor_to_get_molecules_s, units_in)
+    if haskey(factor_to_get_molecules_s, units_in) & haskey(factor_to_get_molecules_s, units_out)
         conversion_factor =
             factor_to_get_molecules_s[units_in] / factor_to_get_molecules_s[units_out]
-    elseif haskey(factor_to_get_molecules, units_in)
+    elseif haskey(factor_to_get_molecules, units_in) & haskey(factor_to_get_molecules, units_out)
         conversion_factor =
             factor_to_get_molecules[units_in] / factor_to_get_molecules[units_out]
     else
-        throw(ArgumentError("Unrecognized units: " * units_in))
+        throw(ArgumentError("Unrecognized units: " * units_in * " or " * units_out))
     end
     return value_in .* conversion_factor
 end
