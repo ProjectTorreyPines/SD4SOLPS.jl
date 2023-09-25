@@ -77,7 +77,7 @@ end
     flow_pam3 = SD4SOLPS.gas_unit_converter(flow_tls, "torr L s^-1", "Pa m^3 s^-1")
     flow_pam3_no_unitful = SD4SOLPS.gas_unit_converter(flow_tls.val, "torr L s^-1", "Pa m^3 s^-1")
     @test flow_pam3.val > 0.0
-    @test flow_pam3_no_unitful == flow_pam3.val
+    @test flow_pam3_no_unitful == Unitful.uconvert(Unitful.Pa*Unitful.m^3/Unitful.s, flow_pam3).val
 
     flow_molecules1 = SD4SOLPS.gas_unit_converter(
         flow_tls,
@@ -98,7 +98,7 @@ end
         temperature=300.0,
     )
     @test flow_molecules1 > flow_molecules2
-    @test flow_molecules2.val == flow_molecules3
+    @test (flow_molecules2 |> Unitful.upreferred).val == flow_molecules3
 end
 
 @testset "actuator" begin

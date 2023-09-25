@@ -83,35 +83,25 @@ function gas_unit_converter(
     if units_in == units_out
         return value_in
     end
-
-    # The conversion between Torr*L and Pa*m^-3 is the only mundane unit conversion in
-    # here. Unitful or any other unit conversion tool could handle this by itself
-    # (e.g. Unitful.uconvert), but you wouldn't need this fancy function for that.
-    # The rest of the conversions, the hard ones (that require assuming a temperature
-    # or knowing molecule structure and atomic numbers) are all implemented with
-    # multiplicative factors, so Unitful's normal conversion handling is bypassed
-    # and replaced with a multiplicative factor.
-    torrl_to_pam3 = torrl_per_pam3 * Unitful.Pa * Unitful.m^3 / Unitful.Torr / Unitful.L
-    # torrl_to_pam3 should simplify to 1, but Unitful doesn't do this simpliciation
-    # without prompting. So the Torr L or the Pa m^-3 will cancel when this factor
-    # is multiplied by some gas pressure*volume units.
+    if units_in in ["torr L s^-1", "Pa m^3 s^-1"]
+        units_in = "pressure*volume"
+    end
+    if units_out in ["torr L s^-1", "Pa m^3 s^-1"]
+        units_out = "pressure*volume"
+    end
 
     pam3_to_molecules =
         Unitful.J / (temperature * BoltzmannConstant) / (Unitful.Pa * Unitful.m^3)
-    torrl_to_molecules = torrl_to_pam3 * pam3_to_molecules
-
 
     factor_to_get_molecules_s = Dict(
-        "torr L s^-1" => torrl_to_molecules,
         "molecules s^-1" => 1.0,
-        "Pa m^3 s^-1" => pam3_to_molecules,
+        "pressure*volume" => pam3_to_molecules,
         "el s^-1" => 1.0 / electrons_per_molecule[species],
         "A" => ElementaryCharge / electrons_per_molecule[species],
     )
     factor_to_get_molecules = Dict(
-        "torr L" => torrl_to_molecules,
         "molecules" => 1.0,
-        "Pa m^3" => pam3_to_molecules,
+        "pressure*volume" => pam3_to_molecules,
         "el" => 1.0 / electrons_per_molecule[species],
         "C" => ElementaryCharge / electrons_per_molecule[species],
     )
