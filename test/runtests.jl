@@ -104,8 +104,14 @@ end
 @testset "actuator" begin
     t = collect(LinRange(0, 2.0, 1001))
     cmd = (t .> 1.0) * 1.55 + (t .> 1.5) * 0.93 + (t .> 1.8) * 0.25
-    flow = SD4SOLPS.model_gas_valve(t, cmd, "simple")
-    @test length(flow) == length(cmd)
+
+    instant_flow_function = SD4SOLPS.model_gas_valve("instant")
+    instant_flow = instant_flow_function(t, cmd)
+    @test length(instant_flow) == length(cmd)
+
+    simple_flow_function = SD4SOLPS.model_gas_valve("simple")
+    simple_flow = simple_flow_function(t, cmd)
+    @test length(simple_flow) == length(cmd)
 end
 
 @testset "core_profile_extension" begin

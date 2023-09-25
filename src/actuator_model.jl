@@ -140,8 +140,14 @@ function gas_unit_converter(
 end
 
 
-
-select_default_config(model::String) = model * "_gas_valve.yml"
+function select_default_config(model::String)
+    froot = model
+    if model == "instant"
+        froot = "simple"
+    end
+    filename = froot * "_gas_valve.yml"
+    return filename
+end
 
 """
     model_gas_valve()
@@ -150,7 +156,7 @@ The main function for handling a gas valve model. Has logic for selecting models
 and configurations.
 """
 function model_gas_valve(
-    t, command, model::String; configuration_file::String="auto", species::String="D2",
+    model::String; configuration_file::String="auto", species::String="D2",
 )
     # Select configuration file
     if configuration_file == "auto"
@@ -175,7 +181,22 @@ function model_gas_valve(
     end
 
     if model == "simple"
-        return simple_gas_model(t, command, config)
+        function simple_gas_model(t, command)
+            flow0 = instant_gas_model(command, config)
+            t_ext = copy(t)
+            prepend!(t_ext, minimum(t) - config["delay"])
+            flow0_ext = copy(flow0)
+            prepend!(flow0_ext, flow0[1])
+            interp = Interpolations.LinearInterpolation(t_ext, flow0_ext)
+            delayed_flow = interp.(t .- config["delay"])
+            return lowpass_filter(t, delayed_flow, config["tau"])
+        end
+        return simple_gas_model
+    elseif model == "instant"
+        function instant_gas_model_(t, command)
+            return instant_gas_model(command, config)
+        end
+        return instant_gas_model_
     else
         throw(ArgumentError("Unrecognized model: " * model))
     end
@@ -197,13 +218,3 @@ function lowpass_filter(t, x, tau)
     return xs
 end
 
-function simple_gas_model(t, command, config)
-    flow0 = instant_gas_model(command, config)
-    t_ext = copy(t)
-    prepend!(t_ext, minimum(t) - config["delay"])
-    flow0_ext = copy(flow0)
-    prepend!(flow0_ext, flow0[1])
-    interp = Interpolations.LinearInterpolation(t_ext, flow0_ext)
-    delayed_flow = interp.(t .- config["delay"])
-    return flow = lowpass_filter(t, delayed_flow, config["tau"])
-end
