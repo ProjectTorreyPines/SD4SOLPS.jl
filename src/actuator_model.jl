@@ -5,7 +5,9 @@ using Unitful: Unitful
 using Interpolations: Interpolations
 using YAML: YAML
 
-torrl_per_pam3 = Float64((1*Unitful.Torr * Unitful.L) / (Unitful.Pa * Unitful.m^3) |>Unitful.upreferred)
+torrl_per_pam3 = Float64(
+    Unitful.upreferred((1 * Unitful.Torr * Unitful.L) / (Unitful.Pa * Unitful.m^3)),
+)
 electrons_per_molecule = Dict(
     "H" => 1 * 2,  # Assumed to mean H2. How would you even puff a bunch of H1.
     "H2" => 1 * 2,
@@ -34,7 +36,8 @@ There is a version that accepts floats in and outputs floats, and another that
 deals in Unitful quantities.
 """
 function gas_unit_converter(
-    value_in::Float64, units_in::String, units_out::String; species::String="H", temperature=293.15,
+    value_in::Float64, units_in::String, units_out::String; species::String="H",
+    temperature=293.15,
 )
     if units_in == units_out
         return value_in
@@ -43,7 +46,6 @@ function gas_unit_converter(
 
     pam3_to_molecules = 1.0 / (temperature * BoltzmannConstant.val)
     torrl_to_molecules = torrl_to_pam3 * pam3_to_molecules
-
 
     factor_to_get_molecules_s = Dict(
         "torr L s^-1" => torrl_to_molecules,
@@ -59,10 +61,12 @@ function gas_unit_converter(
         "el" => 1.0 / electrons_per_molecule[species],
         "C" => ElementaryCharge / electrons_per_molecule[species],
     )
-    if haskey(factor_to_get_molecules_s, units_in) & haskey(factor_to_get_molecules_s, units_out)
+    if haskey(factor_to_get_molecules_s, units_in) &
+       haskey(factor_to_get_molecules_s, units_out)
         conversion_factor =
             factor_to_get_molecules_s[units_in] / factor_to_get_molecules_s[units_out]
-    elseif haskey(factor_to_get_molecules, units_in) & haskey(factor_to_get_molecules, units_out)
+    elseif haskey(factor_to_get_molecules, units_in) &
+           haskey(factor_to_get_molecules, units_out)
         conversion_factor =
             factor_to_get_molecules[units_in] / factor_to_get_molecules[units_out]
     else
@@ -79,8 +83,8 @@ Pressure * volume type flows / quantities and count / current types of units.
 This is the Unitful version.
 Output will be unitful, but the units are not simplified automatically. You can
 perform operations such as
-    (output |> Unitful.upreferred).val
-    Unitful.uconvert(Unitful.whatever, output).val
+(output |> Unitful.upreferred).val
+Unitful.uconvert(Unitful.whatever, output).val
 to handle simplification or conversion of units.
 
 Although this function pretends torr L s^-1 and Pa m^3 s^-1 are different, use of
@@ -90,7 +94,8 @@ and call them torr L s^-1 and the script will deal with them up to having messy
 units in the output.
 """
 function gas_unit_converter(
-    value_in::Unitful.Quantity, units_in::String, units_out::String; species::String="H", temperature=293.15 * Unitful.K,
+    value_in::Unitful.Quantity, units_in::String, units_out::String;
+    species::String="H", temperature=293.15 * Unitful.K,
 )
     if units_in == units_out
         return value_in
@@ -112,7 +117,6 @@ function gas_unit_converter(
         Unitful.J / (temperature * BoltzmannConstant) / (Unitful.Pa * Unitful.m^3)
     torrl_to_molecules = torrl_to_pam3 * pam3_to_molecules
 
-
     factor_to_get_molecules_s = Dict(
         "torr L s^-1" => torrl_to_molecules,
         "molecules s^-1" => 1.0,
@@ -127,10 +131,12 @@ function gas_unit_converter(
         "el" => 1.0 / electrons_per_molecule[species],
         "C" => ElementaryCharge / electrons_per_molecule[species],
     )
-    if haskey(factor_to_get_molecules_s, units_in) & haskey(factor_to_get_molecules_s, units_out)
+    if haskey(factor_to_get_molecules_s, units_in) &
+       haskey(factor_to_get_molecules_s, units_out)
         conversion_factor =
             factor_to_get_molecules_s[units_in] / factor_to_get_molecules_s[units_out]
-    elseif haskey(factor_to_get_molecules, units_in) & haskey(factor_to_get_molecules, units_out)
+    elseif haskey(factor_to_get_molecules, units_in) &
+           haskey(factor_to_get_molecules, units_out)
         conversion_factor =
             factor_to_get_molecules[units_in] / factor_to_get_molecules[units_out]
     else
@@ -138,7 +144,6 @@ function gas_unit_converter(
     end
     return value_in .* conversion_factor
 end
-
 
 function select_default_config(model::String)
     froot = model
@@ -193,9 +198,7 @@ function model_gas_valve(
         end
         return simple_gas_model
     elseif model == "instant"
-        function instant_gas_model_(t, command)
-            return instant_gas_model(command, config)
-        end
+        instant_gas_model_(t, command) = instant_gas_model(command, config)
         return instant_gas_model_
     else
         throw(ArgumentError("Unrecognized model: " * model))
@@ -217,4 +220,3 @@ function lowpass_filter(t, x, tau)
     end
     return xs
 end
-
