@@ -11,6 +11,7 @@ export geqdsk_to_imas
 
 include("$(@__DIR__)/supersize_profile.jl")
 include("$(@__DIR__)/repair_eq.jl")
+include("$(@__DIR__)/actuator_model.jl")
 
 greet() = print("Hello World!")
 
