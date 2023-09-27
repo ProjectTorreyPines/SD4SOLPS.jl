@@ -138,7 +138,7 @@ function geqdsk_to_imas(eqdsk_file, dd; time_index=1)
 end
 
 """
-    core_profiles_2d(dd, time_idx, quantity, r, z)
+    core_profile_2d(dd, prof_time_idx, eq_time_idx, quantity, r, z)
 
 Reads a 1D core profile and flux map and returns a quantity at requested R,Z points
 dd: a data dictionary instance with equilibrium and core profile data loaded
