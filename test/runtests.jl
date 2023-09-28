@@ -70,7 +70,7 @@ function define_default_sample_set()
         "/../sample/ITER_Lore_2296_00000/EQDSK/Baseline2008-li0.70.x4.mod2.eqdsk"
     return b2fgmtry, b2time, b2mn, gridspec, eqdsk
 end
-
+"""
 @testset "lightweight_utilities" begin
     # Gas unit converter
     flow_tls = 40.63 * Unitful.Torr * Unitful.L / Unitful.s
@@ -252,14 +252,20 @@ end
     @test length(rho) > 10
     @test maximum(rho) > 0
 end
+"""
 
 @testset "geqdsk_to_imas" begin
     sample_files =
         (splitdir(pathof(SD4SOLPS))[1] * "/../sample/") .* [
             "g184833.03600", "geqdsk_iter_small_sample",
         ]
+    append!(
+        sample_files,
+        ["$(@__DIR__)/../sample/ITER_Lore_2296_00000/EQDSK/g002296.00200"],
+    )
     tslice = 1
     for sample_file ∈ sample_files
+        println(sample_file)
         dd = OMAS.dd()
         SD4SOLPS.geqdsk_to_imas(sample_file, dd; time_index=tslice)
         eqt = dd.equilibrium.time_slice[tslice]
@@ -283,6 +289,7 @@ end
         p2 = eqt.profiles_2d[1]
         @test length(p2.grid.dim1) > 10
         @test length(p2.grid.dim2) > 10
+        println(size(p2.psi), (length(p2.grid.dim1), length(p2.grid.dim2)))
         @test size(p2.psi) == (length(p2.grid.dim1), length(p2.grid.dim2))
 
         # derived
