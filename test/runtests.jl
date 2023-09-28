@@ -288,6 +288,8 @@ end
         # 2d
         p2 = eqt.profiles_2d[1]
         @test length(p2.grid.dim1) > 10
+        @test minimum(p2.grid.dim1) > 0  # R should be dim1
+        @test minimum(p2.grid.dim2) < 0
         @test length(p2.grid.dim2) > 10
         println(size(p2.psi), (length(p2.grid.dim1), length(p2.grid.dim2)))
         @test size(p2.psi) == (length(p2.grid.dim1), length(p2.grid.dim2))
