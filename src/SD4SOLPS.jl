@@ -108,7 +108,7 @@ function geqdsk_to_imas(eqdsk_file, dd; time_index=1)
     p2 = eqt.profiles_2d[1]
     p2.grid.dim1 = collect(g.r)
     p2.grid.dim2 = collect(g.z)
-    p2.psi = Matrix(transpose(g.psirz))  # Not sure if transpose is correct
+    p2.psi = g.psirz  # Not sure if transpose is correct
     # missing j_tor = pcurrt
 
     # Derived
