@@ -5,6 +5,7 @@ using EFIT: EFIT
 using Plots
 using Test
 using Unitful: Unitful
+import Interpolations
 
 """
     make_test_profile()
@@ -285,20 +286,38 @@ end
         @test length(p1.pressure) == nprof
         @test length(p1.rho_tor_norm) == nprof
 
+        # boundary
+        r_bry = eqt.boundary.outline.r
+        z_bry = eqt.boundary.outline.z
+        @test length(r_bry) == length(z_bry)
+
         # 2d
+        # Did the R and Z (dim1 and dim2) coordinates get written properly?
         p2 = eqt.profiles_2d[1]
-        @test length(p2.grid.dim1) > 10
-        @test minimum(p2.grid.dim1) > 0  # R should be dim1
-        @test minimum(p2.grid.dim2) < 0
-        @test length(p2.grid.dim2) > 10
-        println(size(p2.psi), (length(p2.grid.dim1), length(p2.grid.dim2)))
-        @test size(p2.psi) == (length(p2.grid.dim1), length(p2.grid.dim2))
+        r_eq = p2.grid.dim1
+        z_eq = p2.grid.dim2
+        @test length(r_eq) > 10
+        @test minimum(r_eq) > 0  # R should be dim1
+        @test minimum(z_eq) < 0
+        @test length(z_eq) > 10
+        # Does psi match R and Z?
+        println(size(p2.psi), (length(r_eq), length(z_eq)))
+        @test size(p2.psi) == (length(r_eq), length(z_eq))
+        # Does the psi grid look like it's transposed the right way?
+        # Many equilibrium reconstructions have equal numbers of cells in R and Z,
+        # so transposing the psi map incorrectly would not be detected by checking
+        # its array dimensions. It's also possible to incorrectly associate the psi
+        # map with R and Z (dim1 and dim2). So what recourse does that leave us?
+        # Well, the points on the boundary outline should be at psi_N = 1.0 to
+        # within some small tolerance.
+        psin2d = (p2.psi .- gq.psi_axis) ./ (gq.psi_boundary - gq.psi_axis)
+        tolerance = 2.0e-3  # It's not always a high res contour so cut some slack
+        psin_bry = Interpolations.LinearInterpolation((r_eq, z_eq), psin2d).(r_bry, z_bry)
+        @test maximum(psin_bry) < (1.0 + tolerance)
+        @test minimum(psin_bry) > (1.0 - tolerance)
 
         # derived
         @test gq.q_axis == p1.q[1]
-
-        # boundary
-        @test length(eqt.boundary.outline.r) == length(eqt.boundary.outline.z)
 
         # wall
         limiter = dd.wall.description_2d[1].limiter
