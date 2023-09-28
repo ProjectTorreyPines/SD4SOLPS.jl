@@ -188,7 +188,7 @@ end
 
 @testset "heavy_utilities" begin
     # Test for finding files in allowed folders
-    sample_path = splitdir(pathof(SOLPS2IMAS))[1] * "/../samples/"
+    sample_path = splitdir(pathof(SOLPS2IMAS))[1] * "/../samples"
     file_list = SD4SOLPS.find_files_in_allowed_folders(
         sample_path; eqdsk_file="thereisntoneyet", allow_reduced_versions=true,
     )
@@ -197,7 +197,7 @@ end
     @test length(b2fgmtry) > 10
     @test endswith(b2fgmtry, "b2fgmtry_red") | endswith(b2fgmtry, "b2fgmtry")
     @test length(b2time) > 10
-    @test endswith(b2time, "b2time_red.nc") | endswith(b2fgmtry, "b2time.nc")
+    @test endswith(b2time, "b2time_red.nc") | endswith(b2time, "b2time.nc")
     @test length(b2mn) > 10
     @test endswith(b2mn, "b2mn.dat")
     @test length(gridspec) > 10
@@ -301,8 +301,8 @@ end
 @testset "preparation" begin
     eqdsk_file = "geqdsk_iter_small_sample"
     sample_paths = [
-        splitdir(pathof(SD4SOLPS))[1] * "/../sample/",
-        splitdir(pathof(SOLPS2IMAS))[1] * "/../samples/",
+        splitdir(pathof(SD4SOLPS))[1] * "/../sample",
+        splitdir(pathof(SOLPS2IMAS))[1] * "/../samples",
     ]
     core_method = "simple"
     edge_method = "simple"

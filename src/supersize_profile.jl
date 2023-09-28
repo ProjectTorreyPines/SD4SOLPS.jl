@@ -64,9 +64,18 @@ function extrapolate_core(edge_rho, edge_quantity, rho_output)
         ).(rho_output[rho_output.>=rf])
     return output_profile
 end
-
+#!format off
 """
-    function fill_in_extrapolated_core_profile(dd::OMAS.dd, quantity_name::String)
+    fill_in_extrapolated_core_profile!(
+    dd::OMAS.dd,
+    quantity_name::String;
+    method::String="simple",
+    eq_time_idx::Int64=1,
+    eq_profiles_2d_idx::Int64=1,
+    grid_ggd_idx::Int64=1,
+    space_idx::Int64=1,
+)
+
 
 This function accepts a DD that should be populated with equilibrium and edge_profiles
 as well as a request for a quantity to extrapolate into the core. It then maps
@@ -74,24 +83,38 @@ edge_profiles data to rho, calls the function that performs the extrapolation (w
 not a simple linear extrapolation but has some trickery to attempt to make a somewhat
 convincing profile shape), and writes the result to core_profiles. This involves a bunch
 of interpolations and stuff.
-
 dd: an IMAS/OMAS data dictionary
 quantity_name: the name of a quantity in edge_profiles.profiles_2d and
-core_profiles.profiles_1d, such as "electrons.density"
+               core_profiles.profiles_1d, such as "electrons.density"
+method: Extrapolation method.
+eq_time_idx: index of the equilibrium time slice to use. For a typical SOLPS run,
+             the SOLPS mesh will be based on the equilibrium reconstruction at a single
+             time, so the DD associated with the SOLPS run only needs one equilibrium
+             time slice to be loaded. However, one could combine the complete
+             equilibrium time series with the SOLPS run and then have to specify which
+             slice of the equilibrium corresponds to the SOLPS mesh.
+grid_ggd_idx: index of the grid_ggd to use. For a typical SOLPS run, the SOLPS grid is
+              fixed, so this index defaults to 1. But in future, if a time varying grid
+              is used, then this index will need to be specified.
+space_idx: index of the space to use. For a typical SOLPS run, there will be only one
+           space so this index will mostly remain at 1.
 """
+#!format on
 function fill_in_extrapolated_core_profile!(
     dd::OMAS.dd,
     quantity_name::String;
     method::String="simple",
     eq_time_idx::Int64=1,
+    eq_profiles_2d_idx::Int64=1,
+    grid_ggd_idx::Int64=1,
+    space_idx::Int64=1,
 )
-    ggd_idx = 1
-    space_number = 1
-    space = dd.edge_profiles.grid_ggd[ggd_idx].space[space_number]
+    grid_ggd = dd.edge_profiles.grid_ggd[grid_ggd_idx]
+    space = grid_ggd.space[space_idx]
     cell_subset =
-        SOLPS2IMAS.get_grid_subset_with_index(dd.edge_profiles.grid_ggd[ggd_idx], 5)
+        SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 5)
     midplane_subset =
-        SOLPS2IMAS.get_grid_subset_with_index(dd.edge_profiles.grid_ggd[ggd_idx], 11)
+        SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 11)
 
     if length(midplane_subset.element) < 1
         throw(
@@ -114,114 +137,94 @@ function fill_in_extrapolated_core_profile!(
         )
     end
 
-    nt = 1
+    nt = length(dd.edge_profiles.ggd)
     if length(dd.core_profiles.profiles_1d) < nt
         resize!(dd.core_profiles.profiles_1d, nt)
     end
-    it = 1
-    # quantity_in_cells = SOLPS2IMAS.val_obj(dd.edge_profiles.ggd[it], quantity_name, ggd_idx)
-    tags = split(quantity_name, ".")
-    quantity_str = dd.edge_profiles.ggd[it]
-    for tag ∈ tags
-        quantity_str = getproperty(quantity_str, Symbol(tag))
-    end
-    # Quantity is in cells now
-    cell_subset_idx = 5
-    nqv = length(quantity_str[cell_subset_idx].values)
-    if nqv < 1
-        println(
-            "Quantity ",
-            quantity_name,
-            " has ",
-            nqv,
-            " elements in subset ",
-            cell_subset_idx,
-            ". Unacceptable.",
-        )
-        return
-    end
-    quantity_str[cell_subset_idx].grid_subset_index = cell_subset_idx
-    midplane_cell_centers, quantity = GGDUtils.project_prop_on_subset!(
-        quantity_str,
-        cell_subset,
-        midplane_subset,
-        space,
-    )
-    # Now quantity is at the outboard midplane
+    for it ∈ 1:nt
+        tags = split(quantity_name, ".")
+        quantity_str = dd.edge_profiles.ggd[it]
+        for tag ∈ tags
+            quantity_str = getproperty(quantity_str, Symbol(tag))
+        end
 
-    # Get the rho values to go with the midplane quantity values
-    r = [midplane_cell_centers[i][1] for i ∈ 1:length(midplane_cell_centers)]
-    z = [midplane_cell_centers[i][2] for i ∈ 1:length(midplane_cell_centers)]
-    if length(r) != length(quantity)
-        throw(
-            DimensionMismatch(
-                string(
-                    "Number of cell center coordinates (", length(r),
-                    ") does not match number of cell values (", length(quantity),
-                    ") in the midplane subset.",
+        midplane_cell_centers, quantity = GGDUtils.project_prop_on_subset!(
+            quantity_str,
+            cell_subset,
+            midplane_subset,
+            space,
+        )
+        # Now quantity is at the outboard midplane
+
+        # Get the rho values to go with the midplane quantity values
+        r = [midplane_cell_centers[i][1] for i ∈ eachindex(midplane_cell_centers)]
+        z = [midplane_cell_centers[i][2] for i ∈ eachindex(midplane_cell_centers)]
+        if length(r) != length(quantity)
+            throw(
+                DimensionMismatch(
+                    string(
+                        "Number of cell center coordinates (", length(r),
+                        ") does not match number of cell values (", length(quantity),
+                        ") in the midplane subset.",
+                    ),
                 ),
-            ),
-        )
-    end
-    eq_idx = 1
-    r_eq = dd.equilibrium.time_slice[eq_time_idx].profiles_2d[eq_idx].grid.dim1
-    z_eq = dd.equilibrium.time_slice[eq_time_idx].profiles_2d[eq_idx].grid.dim2
-    rho1_eq = dd.equilibrium.time_slice[eq_time_idx].profiles_1d.rho_tor_norm
-    psia = dd.equilibrium.time_slice[eq_time_idx].global_quantities.psi_axis
-    psib = dd.equilibrium.time_slice[eq_time_idx].global_quantities.psi_boundary
-    psi1_eq =
-        (dd.equilibrium.time_slice[eq_time_idx].profiles_1d.psi .- psia) ./
-        (psib - psia)
-    psi2_eq =
-        (dd.equilibrium.time_slice[eq_time_idx].profiles_2d[eq_idx].psi .- psia) ./
-        (psib - psia)
-    println(size(psi2_eq), ", ", size(r_eq), ", ", size(z_eq))
-    rzpi = Interpolations.LinearInterpolation((z_eq, r_eq), psi2_eq)
-    in_bounds =
-        (r .< maximum(r_eq)) .& (r .> minimum(r_eq)) .& (z .> minimum(z_eq)) .&
-        (z .< maximum(z_eq))
-    println(in_bounds)
-    psi_for_quantity = 10.0 .+ zeros(length(r))
-    psi_for_quantity[in_bounds] = rzpi.(z[in_bounds], r[in_bounds])
-    println(length(psi1_eq), ", ", length(rho1_eq))
-    rho_for_quantity = copy(psi_for_quantity)
-    in_bounds = psi_for_quantity .<= 1.0
-    dpsi = diff(psi1_eq)
-    drho = diff(rho1_eq)
-    prepend!(dpsi, [0.0])
-    prepend!(drho, [0.0])
-    rho_for_quantity[in_bounds] =
-        Interpolations.LinearInterpolation(
-            psi1_eq,
-            rho1_eq,
-        ).(
-            psi_for_quantity[in_bounds]
-        )
+            )
+        end
+        eq_time_slice = dd.equilibrium.time_slice[eq_time_idx]
+        eq_prof_2d = eq_time_slice.profiles_2d[eq_profiles_2d_idx]
+        r_eq = eq_prof_2d.grid.dim1
+        z_eq = eq_prof_2d.grid.dim2
+        rho1_eq = eq_time_slice.profiles_1d.rho_tor_norm
+        psia = eq_time_slice.global_quantities.psi_axis
+        psib = eq_time_slice.global_quantities.psi_boundary
+        psi1_eq = (eq_time_slice.profiles_1d.psi .- psia) ./ (psib - psia)
+        psi2_eq = (eq_prof_2d.psi .- psia) ./ (psib - psia)
+        # println(size(psi2_eq), ", ", size(r_eq), ", ", size(z_eq))
+        rzpi = Interpolations.LinearInterpolation((z_eq, r_eq), psi2_eq)
+        in_bounds =
+            (r .< maximum(r_eq)) .& (r .> minimum(r_eq)) .& (z .> minimum(z_eq)) .&
+            (z .< maximum(z_eq))
+        # println(in_bounds)
+        psi_for_quantity = 10.0 .+ zeros(length(r))
+        psi_for_quantity[in_bounds] = rzpi.(z[in_bounds], r[in_bounds])
+        # println(length(psi1_eq), ", ", length(rho1_eq))
+        rho_for_quantity = copy(psi_for_quantity)
+        in_bounds = psi_for_quantity .<= 1.0
+        dpsi = diff(psi1_eq)
+        drho = diff(rho1_eq)
+        prepend!(dpsi, [0.0])
+        prepend!(drho, [0.0])
+        rho_for_quantity[in_bounds] =
+            Interpolations.LinearInterpolation(
+                psi1_eq,
+                rho1_eq,
+            ).(psi_for_quantity[in_bounds])
 
-    # Make sure the output 1D rho grid exists; create it if needed
-    if length(dd.core_profiles.profiles_1d[it].grid.rho_tor_norm) == 0
-        resize!(dd.core_profiles.profiles_1d[it].grid.rho_tor_norm, 201)
-        # If you don't like this default, then you should write grid.rho_tor_norm before
-        # calling this function.
-        dd.core_profiles.profiles_1d[it].grid.rho_tor_norm =
-            collect(LinRange(0, 1, 201))
-    end
-    rho_core = dd.core_profiles.profiles_1d[it].grid.rho_tor_norm
+        # Make sure the output 1D rho grid exists; create it if needed
+        if length(dd.core_profiles.profiles_1d[it].grid.rho_tor_norm) == 0
+            resize!(dd.core_profiles.profiles_1d[it].grid.rho_tor_norm, 201)
+            # If you don't like this default, then you should write grid.rho_tor_norm before
+            # calling this function.
+            dd.core_profiles.profiles_1d[it].grid.rho_tor_norm =
+                collect(LinRange(0, 1, 201))
+        end
+        rho_core = dd.core_profiles.profiles_1d[it].grid.rho_tor_norm
 
-    # Finally, we're ready to call the extrapolation function and write the result
-    if method == "simple"
-        quantity_core = extrapolate_core(rho_for_quantity, quantity, rho_core)
-    else
-        throw(ArgumentError(string(
-            "Unrecognized extraplation method: ", method,
-        )))
+        # Finally, we're ready to call the extrapolation function and write the result
+        if method == "simple"
+            quantity_core = extrapolate_core(rho_for_quantity, quantity, rho_core)
+        else
+            throw(ArgumentError(string(
+                "Unrecognized extraplation method: ", method,
+            )))
+        end
+        parent = dd.core_profiles.profiles_1d[it]
+        tags = split(quantity_name, ".")
+        for tag ∈ tags[1:end-1]
+            parent = getproperty(parent, Symbol(tag))
+        end
+        setproperty!(parent, Symbol(tags[end]), quantity_core)
     end
-    parent = dd.core_profiles.profiles_1d[it]
-    tags = split(quantity_name, ".")
-    for tag ∈ tags[1:end-1]
-        parent = getproperty(parent, Symbol(tag))
-    end
-    return setproperty!(parent, Symbol(tags[end]), quantity_core)
 end
 
 """
@@ -255,21 +258,41 @@ function extrapolate_edge_exp(
     return y0 * exp(-x ./ lambda)
 end
 
+#! format off
 """
-    function mesh_psi_spacing(dd::OMAS.dd; eq_time_idx::Int64=1)
+    mesh_psi_spacing(
+    dd::OMAS.dd;
+    eq_time_idx::Int64=1,
+    eq_profiles_2d_idx::Int64=1,
+    grid_ggd_idx::Int64=1,
+    space_idx::Int64=1,
+
+)
 
 Inspects the mesh to see how far apart faces are in psi_N.
 Requires that GGD and equilibrium are populated.
 
 dd: a data dictionary instance with required data loaded into it
 eq_time_idx: index of the equilibrium time slice to use. For a typical SOLPS run,
-the SOLPS mesh will be based on the equilibrium reconstruction at a single time,
-so the DD associated with the SOLPS run only needs one equilibrium time slice
-to be loaded. However, one could combine the complete equilibrium time series
-with the SOLPS run and then have to specify which slice of the equilibrium
-corresponds to the SOLPS mesh.
+             the SOLPS mesh will be based on the equilibrium reconstruction at a single
+             time, so the DD associated with the SOLPS run only needs one equilibrium
+             time slice to be loaded. However, one could combine the complete
+             equilibrium time series with the SOLPS run and then have to specify which
+             slice of the equilibrium corresponds to the SOLPS mesh.
+grid_ggd_idx: index of the grid_ggd to use. For a typical SOLPS run, the SOLPS grid is
+              fixed, so this index defaults to 1. But in future, if a time varying grid
+              is used, then this index will need to be specified.
+space_idx: index of the space to use. For a typical SOLPS run, there will be only one
+           space so this index will mostly remain at 1.
 """
-function mesh_psi_spacing(dd::OMAS.dd; eq_time_idx::Int64=1)
+#! format on
+function mesh_psi_spacing(
+    dd::OMAS.dd;
+    eq_time_idx::Int64=1,
+    eq_profiles_2d_idx::Int64=1,
+    grid_ggd_idx::Int64=1,
+    space_idx::Int64=1,
+)
     # Inspect input
     if length(dd.equilibrium.time_slice) < eq_time_idx
         throw(
@@ -283,7 +306,7 @@ function mesh_psi_spacing(dd::OMAS.dd; eq_time_idx::Int64=1)
             ),
         )
     end
-    bad_ggd = (length(dd.edge_profiles.grid_ggd) < 1)
+    bad_ggd = (length(dd.edge_profiles.grid_ggd) < grid_ggd_idx)
     if bad_ggd
         throw(ArgumentError(string(
             "Invalid GGD data.",
@@ -291,9 +314,8 @@ function mesh_psi_spacing(dd::OMAS.dd; eq_time_idx::Int64=1)
     end
 
     # Get flux map
-    eq_idx = 1  # Most cases won't have need for more than 1 of these, as far as I know
     eqt = dd.equilibrium.time_slice[eq_time_idx]
-    p2 = eqt.profiles_2d[eq_idx]
+    p2 = eqt.profiles_2d[eq_profiles_2d_idx]
     r_eq = p2.grid.dim1
     z_eq = p2.grid.dim2
     psi = p2.psi
@@ -307,14 +329,13 @@ function mesh_psi_spacing(dd::OMAS.dd; eq_time_idx::Int64=1)
     # Get a row of cells. Since the mesh should be aligned to the flux surfaces,
     # it shouldn't matter which row is used, although the divertor rows might be
     # weird. So use the outboard midplane. That's always a solid choice.
-    ggd_idx = 1
-    space_number = 1
-    space = dd.edge_profiles.grid_ggd[ggd_idx].space[space_number]
+    grid_ggd = dd.edge_profiles.grid_ggd[grid_ggd_idx]
+    space = grid_ggd.space[space_idx]
     midplane_subset =
-        SOLPS2IMAS.get_grid_subset_with_index(dd.edge_profiles.grid_ggd[ggd_idx], 11)
+        SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 11)
     midplane_cell_centers = GGDUtils.get_subset_centers(space, midplane_subset)
-    r_mesh = [midplane_cell_centers[i][1] for i ∈ 1:length(midplane_cell_centers)]
-    z_mesh = [midplane_cell_centers[i][2] for i ∈ 1:length(midplane_cell_centers)]
+    r_mesh = [midplane_cell_centers[i][1] for i ∈ eachindex(midplane_cell_centers)]
+    z_mesh = [midplane_cell_centers[i][2] for i ∈ eachindex(midplane_cell_centers)]
     println(minimum(r_mesh), ", ", maximum(r_mesh))
     println(minimum(z_mesh), ", ", maximum(z_mesh))
     psin_mesh = rzpi.(z_mesh, r_mesh)
