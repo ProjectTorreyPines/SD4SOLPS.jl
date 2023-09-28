@@ -71,7 +71,7 @@ function define_default_sample_set()
         "/../sample/ITER_Lore_2296_00000/EQDSK/Baseline2008-li0.70.x4.mod2.eqdsk"
     return b2fgmtry, b2time, b2mn, gridspec, eqdsk
 end
-"""
+
 @testset "lightweight_utilities" begin
     # Gas unit converter
     flow_tls = 40.63 * Unitful.Torr * Unitful.L / Unitful.s
@@ -253,7 +253,6 @@ end
     @test length(rho) > 10
     @test maximum(rho) > 0
 end
-"""
 
 @testset "geqdsk_to_imas" begin
     sample_files =

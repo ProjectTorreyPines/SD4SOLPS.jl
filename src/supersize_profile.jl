@@ -180,13 +180,13 @@ function fill_in_extrapolated_core_profile!(
         psi1_eq = (eq_time_slice.profiles_1d.psi .- psia) ./ (psib - psia)
         psi2_eq = (eq_prof_2d.psi .- psia) ./ (psib - psia)
         # println(size(psi2_eq), ", ", size(r_eq), ", ", size(z_eq))
-        rzpi = Interpolations.LinearInterpolation((z_eq, r_eq), psi2_eq)
+        rzpi = Interpolations.LinearInterpolation((r_eq, z_eq), psi2_eq)
         in_bounds =
             (r .< maximum(r_eq)) .& (r .> minimum(r_eq)) .& (z .> minimum(z_eq)) .&
             (z .< maximum(z_eq))
         # println(in_bounds)
         psi_for_quantity = 10.0 .+ zeros(length(r))
-        psi_for_quantity[in_bounds] = rzpi.(z[in_bounds], r[in_bounds])
+        psi_for_quantity[in_bounds] = rzpi.(r[in_bounds], z[in_bounds])
         # println(length(psi1_eq), ", ", length(rho1_eq))
         rho_for_quantity = copy(psi_for_quantity)
         in_bounds = psi_for_quantity .<= 1.0
@@ -322,7 +322,7 @@ function mesh_psi_spacing(
     psia = eqt.global_quantities.psi_axis
     psib = eqt.global_quantities.psi_boundary
     psin_eq = (psi .- psia) ./ (psib - psia)
-    rzpi = Interpolations.LinearInterpolation((z_eq, r_eq), psin_eq)
+    rzpi = Interpolations.LinearInterpolation((r_eq, z_eq), psin_eq)
     println(minimum(r_eq), ", ", maximum(r_eq))
     println(minimum(z_eq), ", ", maximum(z_eq))
 
@@ -338,7 +338,7 @@ function mesh_psi_spacing(
     z_mesh = [midplane_cell_centers[i][2] for i ∈ eachindex(midplane_cell_centers)]
     println(minimum(r_mesh), ", ", maximum(r_mesh))
     println(minimum(z_mesh), ", ", maximum(z_mesh))
-    psin_mesh = rzpi.(z_mesh, r_mesh)
+    psin_mesh = rzpi.(r_mesh, z_mesh)
     # This should come out sorted, but with GGD, who knows.
     ii = sortperm(psin_mesh)
     psin = psin_mesh[ii]
