@@ -180,8 +180,8 @@ function core_profile_2d(dd, prof_time_idx, eq_time_idx, quantity, r, z)
     prepend!(psin_eq_ext, neg_extension)
     prepend!(rhon_eq_ext, neg_extension)
 
-    rho_prof_ext = append!(rho_prof, extension)
-    p_ext = append!(p, zeros(size(extension)))
+    rho_prof_ext = vcat(rho_prof, extension)
+    p_ext = vcat(p, zeros(size(extension)))
     rho_prof_ext = prepend!(rho_prof_ext, neg_extension)
     p_ext = prepend!(p_ext, zeros(size(neg_extension)))
 
