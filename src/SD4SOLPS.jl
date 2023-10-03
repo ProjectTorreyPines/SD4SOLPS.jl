@@ -205,7 +205,7 @@ function core_profile_2d(dd, prof_time_idx, eq_time_idx, quantity, r, z)
         Interpolations.LinearInterpolation((r_eq, z_eq), psinrz).(r, z)
     rhonpsi = Interpolations.LinearInterpolation(psin_eq_ext, rhon_eq_ext)
     rho_at_requested_points = rhonpsi.(psi_at_requested_points)
-    itp = Interpolations.LinearInterpolation(rho_prof, p)
+    itp = Interpolations.LinearInterpolation(rho_prof_ext, p_ext)
     p_at_requested_points = itp.(rho_at_requested_points)
     return p_at_requested_points
 end
