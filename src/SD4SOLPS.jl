@@ -138,15 +138,15 @@ function geqdsk_to_imas(eqdsk_file, dd; time_index=1)
 end
 
 """
-    core_profile_2d(dd, prof_time_idx, eq_time_idx, quantity, r, z)
+    core_profile_2d(dd, prof_time_idx, eq_time_idx, quantity)
 
 Reads a 1D core profile and flux map and returns a quantity at requested R,Z points
 dd: a data dictionary instance with equilibrium and core profile data loaded
 quantity: a string specifying the quantity to fetch
-r: R locations of desired output points / m
-z: Z locations of desired output points / m
+
+Returns a callable function that takes (r, z) as arguments and returns the quantity
 """
-function core_profile_2d(dd, prof_time_idx, eq_time_idx, quantity, r, z)
+function core_profile_2d(dd, prof_time_idx, eq_time_idx, quantity)
     if !check_rho_1d(dd; time_slice=eq_time_idx)
         throw(ArgumentError("Equilibrium rho profile in input DD was missing."))
     end
@@ -201,13 +201,17 @@ function core_profile_2d(dd, prof_time_idx, eq_time_idx, quantity, r, z)
     # OUTPUT INSTRUCTIONS:
     # r and z : coordinates of output points where values of p are desired
 
-    psi_at_requested_points =
-        Interpolations.LinearInterpolation((r_eq, z_eq), psinrz).(r, z)
-    rhonpsi = Interpolations.LinearInterpolation(psin_eq_ext, rhon_eq_ext)
-    rho_at_requested_points = rhonpsi.(psi_at_requested_points)
-    itp = Interpolations.LinearInterpolation(rho_prof_ext, p_ext)
-    p_at_requested_points = itp.(rho_at_requested_points)
-    return p_at_requested_points
+    # psi_at_requested_points =
+    #     Interpolations.LinearInterpolation((r_eq, z_eq), psinrz).(r, z)
+    # rhonpsi = Interpolations.LinearInterpolation(psin_eq_ext, rhon_eq_ext)
+    # rho_at_requested_points = rhonpsi.(psi_at_requested_points)
+    # itp = Interpolations.LinearInterpolation(rho_prof_ext, p_ext)
+    # p_at_requested_points = itp.(rho_at_requested_points)
+    # return p_at_requested_points
+    rz2psin = Interpolations.LinearInterpolation((r_eq, z_eq), psinrz)
+    psin2rhon = Interpolations.LinearInterpolation(psin_eq_ext, rhon_eq_ext)
+    rhon2prof = Interpolations.LinearInterpolation(rho_prof_ext, p_ext)
+    return (r, z) -> rhon2prof(psin2rhon(rz2psin(r, z)))
 end
 
 """
