@@ -283,7 +283,7 @@ if args["heavy_utilities"]
             println("DD was repaired (rho added) for core 2d utility test")
         end
         density_on_grid =
-            SD4SOLPS.core_profile_2d(dd, prof_time_idx, eq_time_idx, quantity, r, z)
+            SD4SOLPS.core_profile_2d(dd, prof_time_idx, eq_time_idx, quantity).(r, z)
         @test size(density_on_grid) == (length(rg), length(zg))
     end
 end
