@@ -123,7 +123,7 @@ function geqdsk_to_imas!(eqdsk_file, dd; time_index=1)
     end
 
     # X-points
-    xrs, xzs, xpsins, xseps = EFIT.x_points(g)
+    xrs, xzs, xpsins, xseps = EFIT.x_points(g; within_limiter_only=false)
     if length(xrs) > 0
         bx = eqt.boundary.x_point
         resize!(bx, length(xrs))
@@ -135,8 +135,8 @@ function geqdsk_to_imas!(eqdsk_file, dd; time_index=1)
         if nprim > 0
             bsx = eqt.boundary_separatrix.x_point
             resize!(bsx, nprim)
-            xrprim = xrs[xseps .== 1]
-            xzprim = xzs[xseps .== 1]
+            xrprim = xrs[xseps.==1]
+            xzprim = xzs[xseps.==1]
             for i ∈ nprim
                 bsx[i].r = xrprim[i]
                 bsx[i].z = xzprim[i]
@@ -146,8 +146,8 @@ function geqdsk_to_imas!(eqdsk_file, dd; time_index=1)
         if nsec > 0
             bssx = eqt.boundary_secondary_separatrix.x_point
             resize!(bssx, nsec)
-            xrsec = xrs[xseps .== 2]
-            xzsec = xzs[xseps .== 2]
+            xrsec = xrs[xseps.==2]
+            xzsec = xzs[xseps.==2]
             for i ∈ nsec
                 bssx[i].r = xrsec[i]
                 bssx[i].z = xzsec[i]
@@ -168,6 +168,7 @@ function geqdsk_to_imas!(eqdsk_file, dd; time_index=1)
     resize!(limiter.unit, 1)
     limiter.unit[1].outline.r = g.rlim
     limiter.unit[1].outline.z = g.zlim
+    return
 end
 
 """

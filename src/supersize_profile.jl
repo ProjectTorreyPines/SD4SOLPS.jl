@@ -6,10 +6,13 @@ Utilities for extrapolating profiles
 using OMAS: OMAS
 using Interpolations: Interpolations
 using GGDUtils: GGDUtils
+using PolygonOps: PolygonOps
+using SOLPS2IMAS: SOLPS2IMAS
 
 export extrapolate_core
 export fill_in_extrapolated_core_profile
 export mesh_psi_spacing
+export find_x_points!
 
 """
     cumul_integrate(x::AbstractVector, y::AbstractVector)
@@ -205,10 +208,8 @@ function fill_in_extrapolated_core_profile!(
         in_bounds =
             (r .< maximum(r_eq)) .& (r .> minimum(r_eq)) .& (z .> minimum(z_eq)) .&
             (z .< maximum(z_eq))
-        # println(in_bounds)
         psi_for_quantity = 10.0 .+ zeros(length(r))
         psi_for_quantity[in_bounds] = rzpi.(r[in_bounds], z[in_bounds])
-        # println(length(psi1_eq), ", ", length(rho1_eq))
         rho_for_quantity = copy(psi_for_quantity)
         in_bounds = psi_for_quantity .<= 1.0
         dpsi = diff(psi1_eq)
@@ -305,6 +306,10 @@ grid_ggd_idx: index of the grid_ggd to use. For a typical SOLPS run, the SOLPS g
               is used, then this index will need to be specified.
 space_idx: index of the space to use. For a typical SOLPS run, there will be only one
            space so this index will mostly remain at 1.
+avoid_guard_cell: assume that the last cell is a guard cell so take end-2 and end-1
+                  instead of end and end-1
+spacing_rule: "edge" or "mean" to make spacing of new cells (in psi_N) be the same
+              as the spacing at the edge of the mesh, or the same as the average spacing
 """
 #! format on
 function mesh_psi_spacing(
@@ -313,6 +318,8 @@ function mesh_psi_spacing(
     eq_profiles_2d_idx::Int64=1,
     grid_ggd_idx::Int64=1,
     space_idx::Int64=1,
+    avoid_guard_cell::Bool=true,
+    spacing_rule="mean",
 )
     # Inspect input
     if length(dd.equilibrium.time_slice) < eq_time_idx
@@ -344,8 +351,8 @@ function mesh_psi_spacing(
     psib = eqt.global_quantities.psi_boundary
     psin_eq = (psi .- psia) ./ (psib - psia)
     rzpi = Interpolations.linear_interpolation((r_eq, z_eq), psin_eq)
-    println(minimum(r_eq), ", ", maximum(r_eq))
-    println(minimum(z_eq), ", ", maximum(z_eq))
+    # println(minimum(r_eq), ", ", maximum(r_eq))
+    # println(minimum(z_eq), ", ", maximum(z_eq))
 
     # Get a row of cells. Since the mesh should be aligned to the flux surfaces,
     # it shouldn't matter which row is used, although the divertor rows might be
@@ -357,14 +364,383 @@ function mesh_psi_spacing(
     midplane_cell_centers = GGDUtils.get_subset_centers(space, midplane_subset)
     r_mesh = [midplane_cell_centers[i][1] for i ∈ eachindex(midplane_cell_centers)]
     z_mesh = [midplane_cell_centers[i][2] for i ∈ eachindex(midplane_cell_centers)]
-    println(minimum(r_mesh), ", ", maximum(r_mesh))
-    println(minimum(z_mesh), ", ", maximum(z_mesh))
     psin_mesh = rzpi.(r_mesh, z_mesh)
     # This should come out sorted, but with GGD, who knows.
     ii = sortperm(psin_mesh)
     psin = psin_mesh[ii]
-    dpsin = psin[end] - psin[end-1]
+    if spacing_rule == "edge"
+        if avoid_guard_cell
+            dpsin = psin[end-1] - psin[end-2]
+        else
+            dpsin = psin[end] - psin[end-1]
+        end
+    else
+        if avoid_guard_cell
+            dpsin = diff(psin[2:end-1])
+        else
+            dpsin = diff(psin)
+        end
+        dpsin = sum(dpsin) / length(dpsin)
+    end
     return dpsin
+end
+
+"""
+    function mesh_extension_sol()
+
+Extends the mesh out into the SOL
+"""
+function mesh_extension_sol!(
+    dd::OMAS.dd;
+    eq_time_idx::Int64=1,
+    eq_profiles_2d_idx::Int64=1,
+    grid_ggd_idx::Int64=1,
+    space_idx::Int64=1,
+)
+    # Prep flux map
+    eqt = dd.equilibrium.time_slice[eq_time_idx]
+    p2 = eqt.profiles_2d[eq_profiles_2d_idx]
+    r_eq = p2.grid.dim1
+    z_eq = p2.grid.dim2
+    psi = p2.psi
+    psia = eqt.global_quantities.psi_axis
+    psib = eqt.global_quantities.psi_boundary
+    psin_eq = (psi .- psia) ./ (psib - psia)
+    rzpi = Interpolations.LinearInterpolation((r_eq, z_eq), psin_eq)
+
+    # Use wall to find maximum extent of contouring project
+    limiter = dd.wall.description_2d[1].limiter
+    wall_r = limiter.unit[1].outline.r
+    wall_z = limiter.unit[1].outline.z
+    wall_psin = rzpi.(wall_r, wall_z)
+
+    # Use ggd mesh to find inner limit of contouring project
+    grid_ggd = dd.edge_profiles.grid_ggd[grid_ggd_idx]
+    space = grid_ggd.space[space_idx]
+    midplane_subset =
+        SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 11)
+    midplane_cell_centers = GGDUtils.get_subset_centers(space, midplane_subset)
+    psin_midplane = rzpi.(midplane_cell_centers[end][1], midplane_cell_centers[end][2])
+
+    # Choose contour levels
+    # The psi spacing function doesn't do much that's unique anymore.
+    # Should it be absorbed into this function intead?
+    dpsin = mesh_psi_spacing(
+        dd;
+        eq_time_idx=eq_time_idx,
+        eq_profiles_2d_idx=eq_profiles_2d_idx,
+        grid_ggd_idx=grid_ggd_idx,
+        space_idx=space_idx,
+        avoid_guard_cell=true,
+        spacing_rule="mean",
+    )
+    lvlstart = maximum(psin_midplane * sign(dpsin)) / sign(dpsin) + dpsin
+    lvlend = maximum(wall_psin * sign(dpsin)) / sign(dpsin) + dpsin
+    nlvl = Int64(ceil((lvlend - lvlstart) / dpsin))
+    psin_levels = collect(LinRange(lvlstart, lvlend, nlvl))
+    if hasproperty(eqt.boundary_secondary_separatrix, :psi)
+        secondary_psi = eqt.boundary_secondary_separatrix.psi
+        secondary_psin = (secondary_psi - psia) / (psib - psia)
+    else
+        secondary_psin = lvlend + dpsin
+    end
+
+    # Choose starting points for the orthogonal (to the contour) gridlines
+    # Use the existing cells of the standard mesh
+    all_cell_subset = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 5)
+    all_border_edges = SOLPS2IMAS.get_subset_boundary(space, all_cell_subset)
+    core_edges = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 15)
+    outer_target = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 13)
+    inner_target = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 14)
+    ci = [core_edges.element[i].object[1].index for i ∈ 1:length(core_edges.element)]
+    oi =
+        [outer_target.element[i].object[1].index for i ∈ 1:length(outer_target.element)]
+    ii =
+        [inner_target.element[i].object[1].index for i ∈ 1:length(inner_target.element)]
+    border_edges = []
+    for i ∈ 1:length(all_border_edges)
+        bi = all_border_edges[i].object[1].index
+        if !(bi in oi) & !(bi in ii) & !(bi in ci)
+            border_edges = [border_edges; all_border_edges[i]]
+        end
+    end
+
+    npol = length(border_edges)
+    mesh_r = zeros((npol, nlvl))
+    mesh_z = zeros((npol, nlvl))
+    corner_idx = 1
+    for i ∈ 1:npol
+        edge_idx = border_edges[i].object[1].index
+        node_idx = space.objects_per_dimension[2].object[edge_idx].nodes[corner_idx]
+        geo = space.objects_per_dimension[1].object[node_idx].geometry
+        mesh_r[i, 1] = geo[1]
+        mesh_z[i, 1] = geo[2]
+    end
+
+    # Step along the paths of steepest descent to populate the mesh.
+    dpsindr, dpsindz = OMAS.gradient(r_eq, z_eq, psin_eq)
+    psin_int = Interpolations.linear_interpolation((r_eq, z_eq), psin_eq)
+    dpdr = Interpolations.linear_interpolation((r_eq, z_eq), dpsindr)
+    dpdz = Interpolations.linear_interpolation((r_eq, z_eq), dpsindz)
+    rlim = (minimum(r_eq), maximum(r_eq))
+    zlim = (minimum(z_eq), maximum(z_eq))
+    pfr = psin_int.(mesh_r[:, 1], mesh_z[:, 1]) .< 1
+    for i ∈ 1:npol
+        if (mesh_r[i, 1] > rlim[1]) & (mesh_r[i, 1] < rlim[2]) &
+           (mesh_z[i, 1] > zlim[1]) & (mesh_z[i, 1] < zlim[2])
+            # direction = psin_int(mesh_r[i, 1], mesh_z[i, 1]) >= 1 ? 1 : -1
+            direction = pfr[i] ? -1 : 1
+            for j ∈ 2:nlvl
+                # This is low resolution linear shooting that could go wrong
+                mesh_r[i, j] = mesh_r[i, j-1]
+                mesh_z[i, j] = mesh_z[i, j-1]
+                upscale = 5  # Should improve gradient following in regions of low gradient (near X-point)
+                for k ∈ 1:upscale
+                    if (mesh_r[i, j] > rlim[1]) & (mesh_r[i, j] < rlim[2]) &
+                       (mesh_z[i, j] > zlim[1]) & (mesh_z[i, j] < zlim[2])
+                        dpr = dpdr(mesh_r[i, j], mesh_z[i, j])
+                        dpz = dpdz(mesh_r[i, j], mesh_z[i, j])
+                        d = dpsin * direction / upscale / (dpr .^ 2 + dpz .^ 2)
+                        mesh_r[i, j] += d * dpr
+                        mesh_z[i, j] += d * dpz
+                    end
+                end
+            end
+        end
+        # println("i=",i,"; r=",mesh_r[i, 1],":", mesh_r[i, end],",z=",mesh_z[i, 1], ":", mesh_z[i, end])
+    end
+
+    # There's a special path; the one that probably should've gone through the
+    # secondary X-point (if there is one). Any numerical error will make this
+    # path miss the X-point and go off to somewhere crazy instead, so instead of
+    # that, let's draw a straight line from the edge of the SOLPS mesh to the
+    # X-point.
+    bssx = eqt.boundary_secondary_separatrix.x_point
+    nsx = length(bssx)
+    println("there are ", nsx, " secondary x points")
+    if nsx > 0
+        # There is hopefully only one X point on the secondary separatrix, but
+        # just in case some joker made a secondary snowflake or something crazy,
+        # we should pick which one we like best.
+        if nsx == 1
+            xidx = 1  # Easy peasy
+        else
+            score = zeros(nsx)
+            rsx = [bssx[i].r for i ∈ 1:nsx]
+            zsx = [bssx[i].z for i ∈ 1:nsx]
+            # Being close to the vertically flipped position of the primary X-pt
+            # seems nice; let's reward that
+            bsx = eqt.boundary_separatrix.x_point
+            npx = length(bsx)
+            rpx = [bsx[i].r for i ∈ 1:npx]
+            zpx = [bsx[i].z for i ∈ 1:npx]
+            # Well, if we have a primary snowflake, there could be multiple
+            # primary X-points, so now we have to pick our favorite primary.
+            # Being close to the boundary is a good sign
+            min_ds2 = ones(npx) * 1e6
+            for j ∈ 1:nsx
+                dr = [mesh_r[i, 1] - rpx[j] for i ∈ 1:npol]
+                dz = [mesh_z[i, 1] - zpx[j] for i ∈ 1:npol]
+                ds2 = dr .^ 2 .+ dz .^ 2
+                min_ds2[j] = minimum(ds2)
+            end
+            primary_idx = argmin(min_ds2)
+            rpx = rpx[primary_idx]
+            zpx = zpx[primary_idx]
+            # There can be only one
+
+            # Distance between secondary X-points and vert flip of favorite primary
+            ds2xx = (rsx .- rpx) .^ 2 .+ (zsx .- (-zpx)) .^ 2
+            score += ds2xx * 5
+
+            # Being close to the boundary is good
+            min_ds2xb = ones(nsx) * 1e6
+            for j ∈ 1:nsx
+                dr = [mesh_r[i, 1] - rsx[j] for i ∈ 1:npol]
+                dz = [mesh_z[i, 1] - zsx[j] for i ∈ 1:npol]
+                ds2 = dr .^ 2 .+ dz .^ 2
+                min_ds2xb[j] = minimum(ds2)
+            end
+            score += min_ds2xb
+            # And the winner is the one with the lowest score
+            xidx = argmin(score)
+        end
+        # Pick which edges are closest to the X-point
+        rx = bssx[xidx].r
+        zx = bssx[xidx].z
+        ds2 = (mesh_r[:, 1] .- rx) .^ 2 .+ (mesh_z[:, 1] .- zx) .^ 2
+        closest = argmin(ds2)
+        # Work out the mesh spacing
+        drm = mesh_r[closest, 2] - mesh_r[closest, 1]
+        dzm = mesh_z[closest, 2] - mesh_z[closest, 1]
+        dm = sqrt(drm^2 + dzm^2)
+        # Pick the angle
+        dr = rx - mesh_r[closest, 1]
+        dz = zx - mesh_z[closest, 1]
+        angle = atan(dz, dr)
+        # Replace the points
+        for i ∈ 2:nlvl
+            mesh_r[closest, i] = mesh_r[closest, 1] + dm * (i - 1) * cos(angle)
+            mesh_z[closest, i] = mesh_z[closest, 1] + dm * (i - 1) * sin(angle)
+        end
+    end
+
+    # ----------------------------------------------------------------------------------
+    # Now we have all the nodes needed for the new mesh, but none are connected
+    # yet. They are, however, organized nicely in order, so it shouldn't be too
+    # hard. Any X-points in the domain should be aggressively ignored, so all the
+    # connections should be nice and simple.
+    # The PFR flag (that was calculated earlier) needs to be respected; pfr nodes
+    # don't connect to non-pfr nodes
+    o0 = space.objects_per_dimension[1]  # Nodes
+    o1 = space.objects_per_dimension[2]  # Edges
+    o2 = space.objects_per_dimension[3]  # Cells (2D projection)
+
+    n_old_node = length(o0.object)
+    n_new_node = nlvl * npol
+    n_nodes = n_old_node + n_new_node
+
+    n_old_edge = length(o1.object)
+    n_new_edge_i = nlvl * (npol - 2)
+    n_new_edge_j = (nlvl - 1) * npol
+    n_new_edge = n_new_edge_i + n_new_edge_j
+    n_edges = n_old_edge + n_new_edge
+
+    n_old_cell = length(o2.object)
+    n_new_cell = (nlvl - 1) * (npol - 2)  # -2 to account for disconnect @ pfr
+    n_cells = n_old_cell + n_new_cell
+
+    pfr_transition = argmax(abs.(diff(pfr)))
+
+    # Define starting points and increments
+    node_start = n_old_node + 1
+    edge_start1 = n_old_edge + 1
+    edge_start2 = edge_start1 + n_new_edge_i
+    cell_start = n_old_cell + 1
+
+    n_per_i = nlvl
+    n_per_j = 1
+    e1_per_i = nlvl  # Edges along the npol direction / i direction
+    e2_per_i = nlvl - 1  # Edges along the nlvl direction / j direction
+    c_per_i = nlvl - 1  # # of cells < # of nodes
+
+    # Get new subsets ready
+    n_existing_subsets = length(grid_ggd.grid_subset)
+    new_subset_indices = [-1, -2, -3, -4, -5, -201, -202, -203, -204, -205]
+    n_new_subsets = length(new_subset_indices)
+    resize!(grid_ggd.grid_subset, n_existing_subsets + n_new_subsets)
+    for i ∈ 1:n_new_subsets
+        grid_ggd.grid_subset[n_existing_subsets+i].identifier.index =
+            new_subset_indices[i]
+    end
+    ext_nodes_sub = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, -201)
+    ext_edges_sub = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, -202)
+    ext_xedges_sub = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, -203)
+    ext_yedges_sub = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, -204)
+    ext_cells_sub = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, -205)
+    # resize!(ext_nodes_sub.element, n_new_node)
+    # resize!(ext_edges_sub.element, n_new_edge)
+    # resize!(ext_xedges_sub.element, n_new_edge_i)
+    # resize!(ext_yedges_sub.element, n_new_edge_j)
+    # resize!(ext_cells_sub.element, n_new_cell)
+
+    # Preserve record of standard (non extended) mesh
+    for i ∈ 1:5
+        std_sub = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, -i)
+        orig_sub = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, i)
+        resize!(std_sub.element, length(orig_sub.element))
+        for j ∈ 1:length(orig_sub.element)
+            std_sub.element[j] = deepcopy(orig_sub.element[j])
+        end
+        std_sub.identifier.index = -i
+        std_sub.dimension = deepcopy(orig_sub.dimension)
+        std_sub.metric = deepcopy(orig_sub.metric)
+    end
+    all_nodes_sub = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 1)
+    all_edges_sub = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 2)
+    all_xedges_sub = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 3)
+    all_yedges_sub = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 4)
+    all_cells_sub = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 5)
+    # resize!(all_nodes_sub.element, n_nodes)
+    # resize!(all_edges_sub.element, n_edges)
+    # resize!(all_xedges_sub.element, length(all_xedges_sub.element) + n_new_edge_i)
+    # resize!(all_yedges_sub.element, length(all_yedges_sub.element) + n_new_edge_j)
+    # resize!(all_cells_sub.element, n_cells)
+
+    nodes = resize!(o0.object, n_nodes)
+    edges = resize!(o1.object, n_edges)
+    cells = resize!(o2.object, n_cells)
+    for i ∈ 1:npol
+        pastpc = i > pfr_transition
+        for j ∈ 1:nlvl
+            # Modified counters
+            ii = i - 1  # Offset due to indexing from 1
+            jj = j - 1  # Offset due to indexing from 1
+            iii = ii - 1 - pastpc  # # of connections < than # of nodes, missing row @ PFR transition
+            jjj = jj - 1  # # of connections < # of nodes
+
+            # Nodes
+            node_idx = node_start + ii * n_per_i + jj
+            nodes[node_idx].geometry = [mesh_r[i, j], mesh_z[i, j]]
+            SOLPS2IMAS.add_subset_element!(ext_nodes_sub, space_idx, 0, node_idx)
+            SOLPS2IMAS.add_subset_element!(all_nodes_sub, space_idx, 0, node_idx)
+
+            # Edges
+            if (i > 1) & (i != pfr_transition)  # i-1 to i  in the npol direction
+                edge_idx1 = edge_start1 + iii * e1_per_i + jj
+                edges[edge_idx1].nodes = [node_idx, node_idx - n_per_i]
+                SOLPS2IMAS.add_subset_element!(ext_edges_sub, space_idx, 1, edge_idx1)
+                SOLPS2IMAS.add_subset_element!(ext_xedges_sub, space_idx, 1, edge_idx1)
+                SOLPS2IMAS.add_subset_element!(all_edges_sub, space_idx, 1, edge_idx1)
+                SOLPS2IMAS.add_subset_element!(all_xedges_sub, space_idx, 1, edge_idx1)
+            end
+            if (j > 1)  # j-1 to j in the nlvl direction
+                edge_idx2 = edge_start2 + ii * e2_per_i + jjj
+                edges[edge_idx2].nodes = [node_idx, node_idx - n_per_j]
+                SOLPS2IMAS.add_subset_element!(ext_edges_sub, space_idx, 1, edge_idx2)
+                SOLPS2IMAS.add_subset_element!(ext_yedges_sub, space_idx, 1, edge_idx2)
+                SOLPS2IMAS.add_subset_element!(all_edges_sub, space_idx, 1, edge_idx2)
+                SOLPS2IMAS.add_subset_element!(all_yedges_sub, space_idx, 1, edge_idx2)
+            end
+
+            # Cells
+            if (i > 1) & (i != pfr_transition) & (j > 1)
+                cell_idx = cell_start + iii * c_per_i + jjj
+                cells[cell_idx].nodes = [
+                    node_idx,
+                    node_idx - n_per_i,
+                    node_idx - n_per_i - n_per_j,
+                    node_idx - n_per_j,
+                ]
+                SOLPS2IMAS.add_subset_element!(ext_cells_sub, space_idx, 2, cell_idx)
+                SOLPS2IMAS.add_subset_element!(all_cells_sub, space_idx, 2, cell_idx)
+            end
+        end
+    end
+
+    # # Make the contours
+    # for psin_level ∈ psin_levels
+    #     if psin_level >= secondary_psin
+    #         throw(
+    #             ArgumentError(
+    #                 "a contour level is outside the secondary separatrix, which isn't handled yet",
+    #             ),
+    #         )
+    #     end
+    #     c = Contour.contour(r_eq, z_eq, psin_eq, psin_level)
+    #     clines = Contour.lines(c)
+    # end
+    fr = open("mesh_r.dat", "w")
+    fz = open("mesh_z.dat", "w")
+    for i ∈ 1:npol
+        for j ∈ 1:nlvl
+            print(fr, mesh_r[i, j], " ")
+            print(fz, mesh_z[i, j], " ")
+        end
+        println(fr, "")
+        println(fz, "")
+    end
+    return
 end
 
 """
