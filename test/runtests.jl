@@ -185,7 +185,7 @@ if args["core_profile_extension"]
         @test isfile(gridspec)
         @test isfile(eqdsk)
         dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time, gridspec, b2mn)
-        SD4SOLPS.geqdsk_to_imas(eqdsk, dd)
+        SD4SOLPS.geqdsk_to_imas!(eqdsk, dd)
         rho = dd.equilibrium.time_slice[1].profiles_1d.rho_tor_norm
 
         if !SD4SOLPS.check_rho_1d(dd; time_slice=1)
@@ -221,7 +221,7 @@ if args["edge_profile_extension"]
         # Test for getting mesh spacing
         b2fgmtry, b2time, b2mn, gridspec, eqdsk = define_default_sample_set()
         dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time, gridspec, b2mn)
-        SD4SOLPS.geqdsk_to_imas(eqdsk, dd)
+        SD4SOLPS.geqdsk_to_imas!(eqdsk, dd)
         dpsin = SD4SOLPS.mesh_psi_spacing(dd)
         @test dpsin > 0.0
 
@@ -260,7 +260,7 @@ if args["heavy_utilities"]
         dd = OMAS.dd()
         eqdsk_file =
             splitdir(pathof(SD4SOLPS))[1] * "/../sample/geqdsk_iter_small_sample"
-        SD4SOLPS.geqdsk_to_imas(eqdsk_file, dd)
+        SD4SOLPS.geqdsk_to_imas!(eqdsk_file, dd)
         quantity = "electrons.density"
         prof_time_idx = eq_time_idx = 1
         resize!(dd.core_profiles.profiles_1d, prof_time_idx)
@@ -293,7 +293,7 @@ if args["repair_eq"]
         # Prepare sample
         dd = OMAS.dd()
         eqdsk = splitdir(pathof(SD4SOLPS))[1] * "/../sample/geqdsk_iter_small_sample"
-        SD4SOLPS.geqdsk_to_imas(eqdsk, dd)
+        SD4SOLPS.geqdsk_to_imas!(eqdsk, dd)
         # Make sure rho is missing
         nt = length(dd.equilibrium.time_slice)
         for it ∈ 1:nt
@@ -324,7 +324,7 @@ if args["geqdsk_to_imas"]
         for sample_file ∈ sample_files
             println(sample_file)
             dd = OMAS.dd()
-            SD4SOLPS.geqdsk_to_imas(sample_file, dd; time_index=tslice)
+            SD4SOLPS.geqdsk_to_imas!(sample_file, dd; time_index=tslice)
             eqt = dd.equilibrium.time_slice[tslice]
 
             # global
