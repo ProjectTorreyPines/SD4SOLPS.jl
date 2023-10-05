@@ -5,12 +5,32 @@ Utilities for extrapolating profiles
 # import CalculusWithJulia
 using OMAS: OMAS
 using Interpolations: Interpolations
-using NumericalIntegration: NumericalIntegration
 using GGDUtils: GGDUtils
 
 export extrapolate_core
 export fill_in_extrapolated_core_profile
 export mesh_psi_spacing
+
+"""
+    cumul_integrate(x::AbstractVector, y::AbstractVector)
+
+Computes cumulative integral of y(x) using trapezoidal rule.
+Source code from obsolete NumericalIntegration.jl package.
+https://github.com/dextorious/NumericalIntegration.jl/blob/540b6c4bee089dfef7b9ae46e8ff188382e7c42e/src/NumericalIntegration.jl#L290
+Modified the code to remove use of @inbounds, @fastmath macros that Julia documentation
+recommends to use with caution.
+"""
+function cumul_integrate(x::AbstractVector, y::AbstractVector)
+    init = (x[2] - x[1]) * (y[1] + y[2])
+    n = length(x)
+    retarr = Vector{typeof(init)}(undef, n)
+    retarr[1] = init
+    for i ∈ 2:n
+        retarr[i] = retarr[i-1] + (x[i] - x[i-1]) * (y[i] + y[i-1])
+    end
+
+    return 0.5 * retarr
+end
 
 """
     extrapolate_core(edge_rho, edge_quantity, rho_output)
@@ -43,22 +63,22 @@ function extrapolate_core(edge_rho, edge_quantity, rho_output)
     gg = [0, gmid, gped_enforce, gf]
     rr = [0, rmid, rped_enforce, rf]
     # https://www.matecdev.com/posts/julia-interpolation.html
-    itp = Interpolations.LinearInterpolation(
+    itp = Interpolations.linear_interpolation(
         rr,
         gg;
         extrapolation_bc=Interpolations.Line(),
     )
     #itp = Interpolations.extrapolate(itp, Interpolations.Line())
     g = itp(rho_output)
-    q_extend = NumericalIntegration.cumul_integrate(rho_output, g)
+    q_extend = cumul_integrate(rho_output, g)
     q_offset =
-        edge_quantity[1] - Interpolations.LinearInterpolation(rho_output, q_extend)(rf)
+        edge_quantity[1] - Interpolations.linear_interpolation(rho_output, q_extend)(rf)
     q_extend .+= q_offset
 
     output_profile = Array{Float64}(undef, length(rho_output))
     output_profile[rho_output.<rf] = q_extend[rho_output.<rf]
     output_profile[rho_output.>=rf] =
-        Interpolations.LinearInterpolation(
+        Interpolations.linear_interpolation(
             edge_rho,
             edge_quantity,
         ).(rho_output[rho_output.>=rf])
@@ -180,7 +200,7 @@ function fill_in_extrapolated_core_profile!(
         psi1_eq = (eq_time_slice.profiles_1d.psi .- psia) ./ (psib - psia)
         psi2_eq = (eq_prof_2d.psi .- psia) ./ (psib - psia)
         # println(size(psi2_eq), ", ", size(r_eq), ", ", size(z_eq))
-        rzpi = Interpolations.LinearInterpolation((r_eq, z_eq), psi2_eq)
+        rzpi = Interpolations.linear_interpolation((r_eq, z_eq), psi2_eq)
         in_bounds =
             (r .< maximum(r_eq)) .& (r .> minimum(r_eq)) .& (z .> minimum(z_eq)) .&
             (z .< maximum(z_eq))
@@ -195,7 +215,7 @@ function fill_in_extrapolated_core_profile!(
         prepend!(dpsi, [0.0])
         prepend!(drho, [0.0])
         rho_for_quantity[in_bounds] =
-            Interpolations.LinearInterpolation(
+            Interpolations.linear_interpolation(
                 psi1_eq,
                 rho1_eq,
             ).(psi_for_quantity[in_bounds])
@@ -322,7 +342,7 @@ function mesh_psi_spacing(
     psia = eqt.global_quantities.psi_axis
     psib = eqt.global_quantities.psi_boundary
     psin_eq = (psi .- psia) ./ (psib - psia)
-    rzpi = Interpolations.LinearInterpolation((r_eq, z_eq), psin_eq)
+    rzpi = Interpolations.linear_interpolation((r_eq, z_eq), psin_eq)
     println(minimum(r_eq), ", ", maximum(r_eq))
     println(minimum(z_eq), ", ", maximum(z_eq))
 

@@ -192,7 +192,7 @@ function model_gas_valve(
             prepend!(t_ext, minimum(t) - config["delay"])
             flow0_ext = copy(flow0)
             prepend!(flow0_ext, flow0[1])
-            interp = Interpolations.LinearInterpolation(t_ext, flow0_ext)
+            interp = Interpolations.linear_interpolation(t_ext, flow0_ext)
             delayed_flow = interp.(t .- config["delay"])
             return lowpass_filter(t, delayed_flow, config["tau"])
         end
