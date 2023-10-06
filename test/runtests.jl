@@ -369,7 +369,7 @@ if args["geqdsk_to_imas"]
             psin2d = (p2.psi .- gq.psi_axis) ./ (gq.psi_boundary - gq.psi_axis)
             tolerance = 2.0e-3  # It's not always a high res contour so cut some slack
             psin_bry =
-                Interpolations.LinearInterpolation((r_eq, z_eq), psin2d).(r_bry, z_bry)
+                Interpolations.linear_interpolation((r_eq, z_eq), psin2d).(r_bry, z_bry)
             @test maximum(psin_bry) < (1.0 + tolerance)
             @test minimum(psin_bry) > (1.0 - tolerance)
 

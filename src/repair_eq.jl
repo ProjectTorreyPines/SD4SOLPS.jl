@@ -134,8 +134,8 @@ function add_rho_to_equilibrium!(dd::OMAS.dd)
                 # Vacuum field simplification: B = R0 B0 / R
                 Interpolations.deduplicate_knots!(r1)
                 Interpolations.deduplicate_knots!(r2)
-                z1i = Interpolations.LinearInterpolation(r1, z1)
-                z2i = Interpolations.LinearInterpolation(r2, z2)
+                z1i = Interpolations.linear_interpolation(r1, z1)
+                z2i = Interpolations.linear_interpolation(r2, z2)
                 rr = LinRange(rmin, rmax, 101)
                 rc = (rr[1:end-1] + rr[2:end]) / 2.0
                 integral_part_ = [

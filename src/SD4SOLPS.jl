@@ -115,7 +115,7 @@ function geqdsk_to_imas(eqdsk_file, dd; time_index=1)
     psin1d = (psi .- g.simag) ./ (g.sibry - g.simag)
     gq.magnetic_axis.b_field_tor = g.bcentr * g.rcentr / g.rmaxis
     gq.q_axis = g.qpsi[1]
-    gq.q_95 = Interpolations.LinearInterpolation(psin1d, g.qpsi)(0.95)
+    gq.q_95 = Interpolations.linear_interpolation(psin1d, g.qpsi)(0.95)
     qmin_idx = argmin(abs.(g.qpsi))
     gq.q_min.value = g.qpsi[qmin_idx]
     if hasproperty(g, :rhovn)
@@ -202,15 +202,15 @@ function core_profile_2d(dd, prof_time_idx, eq_time_idx, quantity)
     # r and z : coordinates of output points where values of p are desired
 
     # psi_at_requested_points =
-    #     Interpolations.LinearInterpolation((r_eq, z_eq), psinrz).(r, z)
-    # rhonpsi = Interpolations.LinearInterpolation(psin_eq_ext, rhon_eq_ext)
+    #     Interpolations.linear_interpolation((r_eq, z_eq), psinrz).(r, z)
+    # rhonpsi = Interpolations.linear_interpolation(psin_eq_ext, rhon_eq_ext)
     # rho_at_requested_points = rhonpsi.(psi_at_requested_points)
-    # itp = Interpolations.LinearInterpolation(rho_prof_ext, p_ext)
+    # itp = Interpolations.linear_interpolation(rho_prof_ext, p_ext)
     # p_at_requested_points = itp.(rho_at_requested_points)
     # return p_at_requested_points
-    rz2psin = Interpolations.LinearInterpolation((r_eq, z_eq), psinrz)
-    psin2rhon = Interpolations.LinearInterpolation(psin_eq_ext, rhon_eq_ext)
-    rhon2prof = Interpolations.LinearInterpolation(rho_prof_ext, p_ext)
+    rz2psin = Interpolations.linear_interpolation((r_eq, z_eq), psinrz)
+    psin2rhon = Interpolations.linear_interpolation(psin_eq_ext, rhon_eq_ext)
+    rhon2prof = Interpolations.linear_interpolation(rho_prof_ext, p_ext)
     return (r, z) -> rhon2prof(psin2rhon(rz2psin(r, z)))
 end
 
