@@ -172,7 +172,8 @@ function fill_in_extrapolated_core_profile!(
             quantity_str,
             cell_subset,
             midplane_subset,
-            space,
+            space;
+            interp_method=:KDTree,
         )
         # Now quantity is at the outboard midplane
 
