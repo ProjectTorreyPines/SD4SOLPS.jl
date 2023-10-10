@@ -1,0 +1,45 @@
+# Configuration for simple gas valve model
+# This is a sample file. It is not tuned for SPARC.
+# p1 and p2 are taken from DIII-D GASB calibrations where available, and made up
+# when not available. Delay and tau are made up but based (loosely) on experience
+# with the DIII-D gas valve system.
+H2:
+  p1: 6.5268e21  # electrons / s; valve calibration constant
+  p2: 0.61  # V^-1; valve calibration constant
+  delay: 0.0024  # s; time before flow into the VV starts responding to a command
+  tau: 0.071  # s; timescale for flow to catch up to new steady state flow
+D2:
+  p1: 3.325e21  # electrons / s; valve calibration constant
+  p2: 0.78  # V^-1; valve calibration constant
+  delay: 0.0025  # s; time before flow into the VV starts responding to a command
+  tau: 0.072  # s; timescale for flow to catch up to new steady state flow
+N2:
+  p1: 2.628e20
+  p2: 3.41
+  delay: 0.0026
+  tau: 0.073
+CD4:
+  p1: 6.311e20
+  p2: 0.91
+  delay: 0.0025
+  tau: 0.074
+Ne:
+  p1: 1.95e21
+  p2: 0.66
+  delay: 0.0028
+  tau: 0.098
+Ar:
+  p1: 3.992e20
+  p2: 1.0
+  delay: 0.003
+  tau: 0.081
+Kr:
+  p1: 8.75e20
+  p2: 0.825
+  delay: 0.0072
+  tau: 0.121
+Xe:
+  p1: 1.29e20
+  p2: 0.067
+  delay: 0.0103
+  tau: 0.137
