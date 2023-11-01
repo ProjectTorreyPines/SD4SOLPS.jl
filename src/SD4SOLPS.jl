@@ -122,6 +122,39 @@ function geqdsk_to_imas!(eqdsk_file, dd; time_index=1)
         gq.q_min.rho_tor_norm = g.rhovn[qmin_idx]
     end
 
+    # X-points
+    xrs, xzs, xpsins, xseps = EFIT.x_points(g)
+    if length(xrs) > 0
+        bx = eqt.boundary.x_point
+        resize!(bx, length(xrs))
+        for i ∈ length(xrs)
+            bx[i].r = xrs[i]
+            bx[i].z = xzs[i]
+        end
+        nprim = sum(xseps .== 1)
+        if nprim > 0
+            bsx = eqt.boundary_separatrix.x_point
+            resize!(bsx, nprim)
+            xrprim = xrs[xseps .== 1]
+            xzprim = xzs[xseps .== 1]
+            for i ∈ nprim
+                bsx[i].r = xrprim[i]
+                bsx[i].z = xzprim[i]
+            end
+        end
+        nsec = sum(xseps .== 2)
+        if nsec > 0
+            bssx = eqt.boundary_secondary_separatrix.x_point
+            resize!(bssx, nsec)
+            xrsec = xrs[xseps .== 2]
+            xzsec = xzs[xseps .== 2]
+            for i ∈ nsec
+                bssx[i].r = xrsec[i]
+                bssx[i].z = xzsec[i]
+            end
+        end
+    end
+
     # Boundary / LCFS
     eqt.boundary.outline.r = g.rbbbs
     eqt.boundary.outline.z = g.zbbbs

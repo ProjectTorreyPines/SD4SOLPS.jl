@@ -376,6 +376,16 @@ if args["geqdsk_to_imas"]
             # derived
             @test gq.q_axis == p1.q[1]
 
+            # X-points
+            bx = eqt.boundary.x_point
+            bsx = eqt.boundary_separatrix.x_point
+            bssx = eqt.boundary_secondary_separatrix.x_point
+            nxpt = length(bx)
+            nprim = length(bsx)
+            nsec = length(bssx)
+            @test nxpt >= 1
+            @test nxpt >= (nprim + nsec)
+
             # wall
             limiter = dd.wall.description_2d[1].limiter
             @test length(limiter.unit[1].outline.r) > 10
