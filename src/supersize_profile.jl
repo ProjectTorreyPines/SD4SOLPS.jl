@@ -8,6 +8,7 @@ using Interpolations: Interpolations
 using GGDUtils: GGDUtils
 using PolygonOps: PolygonOps
 using SOLPS2IMAS: SOLPS2IMAS
+using JSON: JSON
 
 export extrapolate_core
 export fill_in_extrapolated_core_profile
@@ -280,6 +281,18 @@ function extrapolate_edge_exp(
     return y0 * exp(-x ./ lambda)
 end
 
+"""
+    prep_flux_map()
+
+Reads equilibrium data and extracts/derives some useful quantities.
+This is very basic, but it was being repeated and that's a no-no.
+Returns:
+
+  - R values of the equilibrium grid
+  - Z values of the eq grid
+  - normalized poloidal flux on the equilibrium grid
+  - a linear interpolation of norm pol flux vs. R and Z, ready to be evaluated
+"""
 function prep_flux_map(dd::OMAS.dd; eq_time_idx::Int64=1, eq_profiles_2d_idx::Int64=1)
     eqt = dd.equilibrium.time_slice[eq_time_idx]
     p2 = eqt.profiles_2d[eq_profiles_2d_idx]
@@ -388,6 +401,14 @@ function mesh_psi_spacing(
     return dpsin
 end
 
+"""
+    pick_extension_psi_range()
+
+Defines the psi_N levels for an extended mesh. The range of psi_N levels starts
+at the outer edge of the existing edge_profiles mesh at the midplane and goes
+out to the most distant (in flux space) point on the limiting surface.
+Returns a vector of psi_N levels.
+"""
 function pick_extension_psi_range(
     dd::OMAS.dd;
     eq_time_idx::Int64=1,
@@ -436,6 +457,17 @@ function pick_extension_psi_range(
     return psin_levels
 end
 
+"""
+    pick_mesh_ext_starting_points(dd; grid_ggd_idx, space_idx)
+
+Picks starting points for the radial lines of the mesh extension. The strategy
+is to start from the outer edge of the existing mesh and follow the steepest
+gradient (of psi_N) to extend these gridlines outward.
+dd: a data dictionary instance with edge_profiles ggd and equilibrium loaded
+grid_ggd_idx: index within ggd
+space_idx: space number / index of the space to work with within edge_profiles
+Returns a tuple with vectors of R and Z starting points.
+"""
 function pick_mesh_ext_starting_points(
     dd::OMAS.dd;
     grid_ggd_idx::Int64=1,
@@ -478,13 +510,48 @@ function pick_mesh_ext_starting_points(
     return r, z
 end
 
-function mesh_ext_follow_grad(r_eq, z_eq, psin_eq, rzpi, rstart, zstart, nlvl, dpsin)
+#!format off
+"""
+    mesh_ext_follow_grad()
+
+Follows the steepest gradient from a set of starting points, dropping nodes at
+approximately regular intervals in psi_N. Due to the numerical techniques used, the
+node spacing may be imperfect (especially prone to error in regions where curvature
+of psi_N is large compared to its gradient).
+r_eq: Equilibrium reconstruction's grid, R coordinates
+z_eq: Equilibrium reconstruction's grid, Z coordinates
+psin_eq: Normalized poloidal flux in the equilibrium reconstruction as a function of R and Z
+rzpi: linear interpolation of psin_eq() as a function of r_eq and z_eq
+    This was probably already computed and I think time would be saved by reusing it.
+    If you don't already have it, you can pass in nothing and let this function calculate it.
+rstart: R coordinates of starting points for the gradient following.
+zstart: Z coordinates of starting points
+nlvl: number of nodes to drop while following the gradient
+dpsin: node spacing in delta psi_N
+
+Returns two matrices with R and Z coordinates of the mesh extension
+"""
+#!format on
+function mesh_ext_follow_grad(
+    r_eq::Vector{Float64},
+    z_eq::Vector{Float64},
+    psin_eq::Matrix,
+    rzpi,
+    rstart::Vector{Float64},
+    zstart::Vector{Float64},
+    nlvl::Int64,
+    dpsin::Float64,
+)
     npol = length(rstart)
     mesh_r = zeros((npol, nlvl))
     mesh_z = zeros((npol, nlvl))
     for i ∈ 1:npol
         mesh_r[i, 1] = rstart[i]
         mesh_z[i, 1] = zstart[i]
+    end
+
+    if rzpi === nothing
+        rzpi = Interpolations.LinearInterpolation((r_eq, z_eq), psin_eq)
     end
 
     # Step along the paths of steepest descent to populate the mesh.
@@ -521,6 +588,15 @@ function mesh_ext_follow_grad(r_eq, z_eq, psin_eq, rzpi, rstart, zstart, nlvl, d
     return mesh_r, mesh_z
 end
 
+"""
+    modify_mesh_ext_near_x!
+
+Modifies an extended mesh near a secondary X-point to compensate for the
+tendency of the mesh to go nuts near the X-point.
+eqt: equilibrium.time_slice information
+mesh_r: matrix of R values for the extended mesh
+mesh_z: matrix of Z values for the extended mesh
+"""
 function modify_mesh_ext_near_x!(eqt, mesh_r, mesh_z)
     # There's a special path; the one that probably should've gone through the
     # secondary X-point (if there is one). Any numerical error will make this
@@ -599,7 +675,30 @@ function modify_mesh_ext_near_x!(eqt, mesh_r, mesh_z)
     end
 end
 
-function record_regular_mesh!(dd::OMAS.dd, grid_ggd_idx, space_idx, mesh_r, mesh_z, cut)
+#!format off
+"""
+    record_regular_mesh!()
+
+Records arrays of mesh data from regular 2D arrays into the DD
+dd: the data dictionary
+grid_ggd_idx: index of the grid_ggd within edge_profiles
+space_idx: index of the space in edge_profiles
+mesh_r: Matrix of R values along a mesh. Should be 2D. The two dimensions are in
+        the radial and poloidal directions.
+mesh_z: Z values to go with mesh_r.
+cut: Poloidal index of a cut between two groups of disconnected cells. Poloidal
+     connections (faces, cells) will not be added between this poloidal index
+     and the next index.
+"""
+#!format on
+function record_regular_mesh!(
+    dd::OMAS.dd,
+    grid_ggd_idx::Int64,
+    space_idx::Int64,
+    mesh_r::Matrix{Float64},
+    mesh_z::Matrix{Float64},
+    cut::Int64,
+)
     grid_ggd = dd.edge_profiles.grid_ggd[grid_ggd_idx]
     space = grid_ggd.space[space_idx]
 
@@ -717,17 +816,114 @@ function record_regular_mesh!(dd::OMAS.dd, grid_ggd_idx, space_idx, mesh_r, mesh
             end
         end
     end
+end
 
-    fr = open("mesh_r.dat", "w")
-    fz = open("mesh_z.dat", "w")
-    for i ∈ 1:npol
-        for j ∈ 1:nlvl
-            print(fr, mesh_r[i, j], " ")
-            print(fz, mesh_z[i, j], " ")
-        end
-        println(fr, "")
-        println(fz, "")
+"""
+    convert_filename(filename::String)
+
+Converts a filename into a string that doesn't have illegal characters.
+The main application is removing the path separator from source files with full
+paths so the full paths* can be part of the new filename. This way, the input
+files used to form some data can be part of the cache name, allowing quick lookup:
+the cache filename is defined by the input files, and if it doesn't exist, it
+needs to be generated.
+"""
+function convert_filename(filename::String)
+    filename_mod = replace(filename, "/" => "__")  # Illegal on *nix bc it's the path separator
+    filename_mod = replace(filename_mod, ":" => "--")  # Illegal on mac and windows
+    filename_mod = replace(filename_mod, "\\" => "__")  # Illegal on windows
+    filename_mod = replace(filename_mod, "\"" => "''")  # Illegal on windows
+    filename_mod = replace(filename_mod, "<" => "_lt_")  # Illegal on windows
+    filename_mod = replace(filename_mod, ">" => "_gt_")  # Illegal on windows
+    filename_mod = replace(filename_mod, "|" => "_pipe_")  # Illegal on windows
+    filename_mod = replace(filename_mod, "?" => "_q_")  # Illegal on windows
+    filename_mod = replace(filename_mod, "*" => "_a_")  # Illegal on windows
+    return filename_mod
+end
+
+#!format off
+"""
+    cached_mesh_extension!()
+
+Adds an extended mesh to a data dictionary, possibly from a cached result.
+dd: The data dictionary. It will be modified in place.
+eqdsk_file: the name of the EQDSK file that was used to get equilibrium data in
+            the dd.
+b2fgmtry: the name of the SOLPS geometry file that was used to get GGD info in
+          edge_profiles in the dd.
+eq_time_idx: Index of the time slice in equilibrium
+eq_profiles_2d_idx: Index of the 2D profile set in equilibrium
+                    (there is usually only one)
+grid_ggd_idx: Index of the grid_ggd set in edge_profiles
+space_idx: Index of the space
+clear_cache: delete any existing cache file (for use in testing)
+"""
+#!format on
+function cached_mesh_extension!(
+    dd::OMAS.dd,
+    eqdsk_file::String,
+    b2fgmtry::String;
+    eq_time_idx::Int64=1,
+    eq_profiles_2d_idx::Int64=1,
+    grid_ggd_idx::Int64=1,
+    space_idx::Int64=1,
+    clear_cache=false,
+)
+    path = "$(@__DIR__)/../data/"
+    eqdsk_file_mod = convert_filename(eqdsk_file)
+    b2fgmtry_mod = convert_filename(eqdsk_file)
+    cached_ext_name = path * eqdsk_file_mod * "_" * b2fgmtry_mod * ".mesh_ext.json"
+    if clear_cache
+        rm(cached_ext_name; force=true)
+        return cached_ext_name
     end
+    if isfile(cached_ext_name)
+        # md = YAML.load_file(cached_ext_name)
+        md = JSON.parsefile(cached_ext_name)
+        pfr_transition = md["pfr_transition"]
+        mesh_r = convert(Matrix{Float64}, mapreduce(permutedims, vcat, md["r"])')
+        mesh_z = convert(Matrix{Float64}, mapreduce(permutedims, vcat, md["z"])')
+        npol = md["npol"]
+        nlvl = md["nlvl"]
+        record_regular_mesh!(
+            dd,
+            grid_ggd_idx,
+            space_idx,
+            mesh_r,
+            mesh_z,
+            pfr_transition,
+        )
+    else
+        mesh_r, mesh_z, pfr_transition = mesh_extension_sol!(
+            dd;
+            eq_time_idx=eq_time_idx,
+            eq_profiles_2d_idx=eq_profiles_2d_idx,
+            grid_ggd_idx=grid_ggd_idx,
+            space_idx=space_idx,
+        )
+        npol, nlvl = size(mesh_r)
+        data = Dict()
+        data["pfr_transition"] = pfr_transition
+        data["npol"] = npol
+        data["nlvl"] = nlvl
+        data["r"] = mesh_r
+        data["z"] = mesh_z
+        # YAML.write_file(cached_ext_name, data)
+        open(cached_ext_name, "w") do f
+            JSON.print(f, data)
+        end
+        # fr = open("mesh_r.dat", "w")
+        # fz = open("mesh_z.dat", "w")
+        # for i ∈ 1:npol
+        #     for j ∈ 1:nlvl
+        #         print(fr, mesh_r[i, j], " ")
+        #         print(fz, mesh_z[i, j], " ")
+        #     end
+        #     println(fr, "")
+        #     println(fz, "")
+        # end
+    end
+    return cached_ext_name
 end
 
 """
@@ -779,7 +975,7 @@ function mesh_extension_sol!(
     pfr = rzpi.(mesh_r[:, 1], mesh_z[:, 1]) .< 1
     pfr_transition = argmax(abs.(diff(pfr)))
     record_regular_mesh!(dd, grid_ggd_idx, space_idx, mesh_r, mesh_z, pfr_transition)
-    return
+    return mesh_r, mesh_z, pfr_transition
 end
 
 """

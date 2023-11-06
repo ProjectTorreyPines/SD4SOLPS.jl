@@ -233,7 +233,9 @@ if args["edge_profile_extension"]
             deepcopy(SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, i)) for
             i ∈ extended_subs
         ]
-        SD4SOLPS.mesh_extension_sol!(dd; grid_ggd_idx=grid_ggd_idx)
+        cfn = SD4SOLPS.cached_mesh_extension!(dd, eqdsk, b2fgmtry; clear_cache=true)
+        println("cleared ext mesh cache: ", cfn)
+        SD4SOLPS.cached_mesh_extension!(dd, eqdsk, b2fgmtry; grid_ggd_idx=grid_ggd_idx)
         for j ∈ extended_subs
             orig_sub = orig_subs[j]
             std_sub = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, -j)

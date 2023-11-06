@@ -280,6 +280,7 @@ function preparation(
     # ... more profiles here as they become available in b2time
     println("Extrapolated core profiles")
 
+    cached_mesh_extension!(dd, eqdsk_file, b2fgmtry)
     fill_in_extrapolated_edge_profile!(dd, "electrons.density"; method=core_method)
     # ... more profiles here
     println("Extrapolated edge profiles (but not really (placeholder only))")
