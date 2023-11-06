@@ -5,7 +5,8 @@ Utilities for extrapolating profiles
 # import CalculusWithJulia
 using OMAS: OMAS
 using Interpolations: Interpolations
-using GGDUtils: GGDUtils
+using GGDUtils:
+    GGDUtils, get_grid_subset_with_index, add_subset_element!, get_subset_boundary
 using PolygonOps: PolygonOps
 using SOLPS2IMAS: SOLPS2IMAS
 using JSON: JSON
@@ -136,9 +137,9 @@ function fill_in_extrapolated_core_profile!(
     grid_ggd = dd.edge_profiles.grid_ggd[grid_ggd_idx]
     space = grid_ggd.space[space_idx]
     cell_subset =
-        SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 5)
+        get_grid_subset_with_index(grid_ggd, 5)
     midplane_subset =
-        SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 11)
+        get_grid_subset_with_index(grid_ggd, 11)
 
     if length(midplane_subset.element) < 1
         throw(
@@ -376,7 +377,7 @@ function mesh_psi_spacing(
     grid_ggd = dd.edge_profiles.grid_ggd[grid_ggd_idx]
     space = grid_ggd.space[space_idx]
     midplane_subset =
-        SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 11)
+        get_grid_subset_with_index(grid_ggd, 11)
     midplane_cell_centers = GGDUtils.get_subset_centers(space, midplane_subset)
     r_mesh = [midplane_cell_centers[i][1] for i ∈ eachindex(midplane_cell_centers)]
     z_mesh = [midplane_cell_centers[i][2] for i ∈ eachindex(midplane_cell_centers)]
@@ -427,7 +428,7 @@ function pick_extension_psi_range(
     # Use ggd mesh to find inner limit of contouring project
     grid_ggd = dd.edge_profiles.grid_ggd[grid_ggd_idx]
     space = grid_ggd.space[space_idx]
-    midplane_subset = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 11)
+    midplane_subset = get_grid_subset_with_index(grid_ggd, 11)
     midplane_cell_centers = GGDUtils.get_subset_centers(space, midplane_subset)
     psin_midplane = rzpi.(midplane_cell_centers[end][1], midplane_cell_centers[end][2])
 
@@ -478,11 +479,11 @@ function pick_mesh_ext_starting_points(
 
     # Choose starting points for the orthogonal (to the contour) gridlines
     # Use the existing cells of the standard mesh
-    all_cell_subset = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 5)
-    all_border_edges = SOLPS2IMAS.get_subset_boundary(space, all_cell_subset)
-    core_edges = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 15)
-    outer_target = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 13)
-    inner_target = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 14)
+    all_cell_subset = get_grid_subset_with_index(grid_ggd, 5)
+    all_border_edges = get_subset_boundary(space, all_cell_subset)
+    core_edges = get_grid_subset_with_index(grid_ggd, 15)
+    outer_target = get_grid_subset_with_index(grid_ggd, 13)
+    inner_target = get_grid_subset_with_index(grid_ggd, 14)
     ci = [core_edges.element[i].object[1].index for i ∈ 1:length(core_edges.element)]
     oi =
         [outer_target.element[i].object[1].index for i ∈ 1:length(outer_target.element)]
@@ -742,16 +743,16 @@ function record_regular_mesh!(
         grid_ggd.grid_subset[n_existing_subsets+i].identifier.index =
             new_subset_indices[i]
     end
-    ext_nodes_sub = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, -201)
-    ext_edges_sub = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, -202)
-    ext_xedges_sub = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, -203)
-    ext_yedges_sub = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, -204)
-    ext_cells_sub = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, -205)
+    ext_nodes_sub = get_grid_subset_with_index(grid_ggd, -201)
+    ext_edges_sub = get_grid_subset_with_index(grid_ggd, -202)
+    ext_xedges_sub = get_grid_subset_with_index(grid_ggd, -203)
+    ext_yedges_sub = get_grid_subset_with_index(grid_ggd, -204)
+    ext_cells_sub = get_grid_subset_with_index(grid_ggd, -205)
 
     # Preserve record of standard (non extended) mesh
     for i ∈ 1:5
-        std_sub = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, -i)
-        orig_sub = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, i)
+        std_sub = get_grid_subset_with_index(grid_ggd, -i)
+        orig_sub = get_grid_subset_with_index(grid_ggd, i)
         resize!(std_sub.element, length(orig_sub.element))
         for j ∈ 1:length(orig_sub.element)
             std_sub.element[j] = deepcopy(orig_sub.element[j])
@@ -760,11 +761,11 @@ function record_regular_mesh!(
         std_sub.dimension = deepcopy(orig_sub.dimension)
         std_sub.metric = deepcopy(orig_sub.metric)
     end
-    all_nodes_sub = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 1)
-    all_edges_sub = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 2)
-    all_xedges_sub = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 3)
-    all_yedges_sub = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 4)
-    all_cells_sub = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 5)
+    all_nodes_sub = get_grid_subset_with_index(grid_ggd, 1)
+    all_edges_sub = get_grid_subset_with_index(grid_ggd, 2)
+    all_xedges_sub = get_grid_subset_with_index(grid_ggd, 3)
+    all_yedges_sub = get_grid_subset_with_index(grid_ggd, 4)
+    all_cells_sub = get_grid_subset_with_index(grid_ggd, 5)
 
     nodes = resize!(o0.object, n_nodes)
     edges = resize!(o1.object, n_edges)
@@ -781,25 +782,25 @@ function record_regular_mesh!(
             # Nodes
             node_idx = node_start + ii * n_per_i + jj
             nodes[node_idx].geometry = [mesh_r[i, j], mesh_z[i, j]]
-            SOLPS2IMAS.add_subset_element!(ext_nodes_sub, space_idx, 0, node_idx)
-            SOLPS2IMAS.add_subset_element!(all_nodes_sub, space_idx, 0, node_idx)
+            add_subset_element!(ext_nodes_sub, space_idx, 0, node_idx)
+            add_subset_element!(all_nodes_sub, space_idx, 0, node_idx)
 
             # Edges
             if (i > 1) & (i != cut)  # i-1 to i  in the npol direction
                 edge_idx1 = edge_start1 + iii * e1_per_i + jj
                 edges[edge_idx1].nodes = [node_idx, node_idx - n_per_i]
-                SOLPS2IMAS.add_subset_element!(ext_edges_sub, space_idx, 1, edge_idx1)
-                SOLPS2IMAS.add_subset_element!(ext_xedges_sub, space_idx, 1, edge_idx1)
-                SOLPS2IMAS.add_subset_element!(all_edges_sub, space_idx, 1, edge_idx1)
-                SOLPS2IMAS.add_subset_element!(all_xedges_sub, space_idx, 1, edge_idx1)
+                add_subset_element!(ext_edges_sub, space_idx, 1, edge_idx1)
+                add_subset_element!(ext_xedges_sub, space_idx, 1, edge_idx1)
+                add_subset_element!(all_edges_sub, space_idx, 1, edge_idx1)
+                add_subset_element!(all_xedges_sub, space_idx, 1, edge_idx1)
             end
             if (j > 1)  # j-1 to j in the nlvl direction
                 edge_idx2 = edge_start2 + ii * e2_per_i + jjj
                 edges[edge_idx2].nodes = [node_idx, node_idx - n_per_j]
-                SOLPS2IMAS.add_subset_element!(ext_edges_sub, space_idx, 1, edge_idx2)
-                SOLPS2IMAS.add_subset_element!(ext_yedges_sub, space_idx, 1, edge_idx2)
-                SOLPS2IMAS.add_subset_element!(all_edges_sub, space_idx, 1, edge_idx2)
-                SOLPS2IMAS.add_subset_element!(all_yedges_sub, space_idx, 1, edge_idx2)
+                add_subset_element!(ext_edges_sub, space_idx, 1, edge_idx2)
+                add_subset_element!(ext_yedges_sub, space_idx, 1, edge_idx2)
+                add_subset_element!(all_edges_sub, space_idx, 1, edge_idx2)
+                add_subset_element!(all_yedges_sub, space_idx, 1, edge_idx2)
             end
 
             # Cells
@@ -811,8 +812,8 @@ function record_regular_mesh!(
                     node_idx - n_per_i - n_per_j,
                     node_idx - n_per_j,
                 ]
-                SOLPS2IMAS.add_subset_element!(ext_cells_sub, space_idx, 2, cell_idx)
-                SOLPS2IMAS.add_subset_element!(all_cells_sub, space_idx, 2, cell_idx)
+                add_subset_element!(ext_cells_sub, space_idx, 2, cell_idx)
+                add_subset_element!(all_cells_sub, space_idx, 2, cell_idx)
             end
         end
     end
@@ -910,7 +911,7 @@ function cached_mesh_extension!(
         data["z"] = mesh_z
         # YAML.write_file(cached_ext_name, data)
         open(cached_ext_name, "w") do f
-            JSON.print(f, data)
+            return JSON.print(f, data)
         end
         # fr = open("mesh_r.dat", "w")
         # fz = open("mesh_z.dat", "w")

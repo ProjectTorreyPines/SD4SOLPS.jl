@@ -7,6 +7,7 @@ using Test
 using Unitful: Unitful
 using Interpolations: Interpolations
 using ArgParse: ArgParse
+using GGDUtils: GGDUtils, get_grid_subset_with_index
 
 function parse_commandline()
     s = ArgParse.ArgParseSettings(; description="Run tests. Default is all tests.")
@@ -230,7 +231,7 @@ if args["edge_profile_extension"]
         grid_ggd = dd.edge_profiles.grid_ggd[grid_ggd_idx]
         extended_subs = 1:5
         orig_subs = [
-            deepcopy(SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, i)) for
+            deepcopy(get_grid_subset_with_index(grid_ggd, i)) for
             i ∈ extended_subs
         ]
         cfn = SD4SOLPS.cached_mesh_extension!(dd, eqdsk, b2fgmtry; clear_cache=true)
@@ -238,9 +239,9 @@ if args["edge_profile_extension"]
         SD4SOLPS.cached_mesh_extension!(dd, eqdsk, b2fgmtry; grid_ggd_idx=grid_ggd_idx)
         for j ∈ extended_subs
             orig_sub = orig_subs[j]
-            std_sub = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, -j)
-            all_sub = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, j)
-            ext_sub = SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, -200 - j)
+            std_sub = get_grid_subset_with_index(grid_ggd, -j)
+            all_sub = get_grid_subset_with_index(grid_ggd, j)
+            ext_sub = get_grid_subset_with_index(grid_ggd, -200 - j)
             no = length(orig_sub.element)
             ns = length(std_sub.element)
             na = length(all_sub.element)
