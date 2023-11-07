@@ -789,6 +789,9 @@ function record_regular_mesh!(
             if (i > 1) & (i != cut)  # i-1 to i  in the npol direction
                 edge_idx1 = edge_start1 + iii * e1_per_i + jj
                 edges[edge_idx1].nodes = [node_idx, node_idx - n_per_i]
+                resize!(edges[edge_idx1].boundary, 2)
+                edges[edge_idx1].boundary[1].index = node_idx
+                edges[edge_idx1].boundary[2].index = node_idx - n_per_i
                 add_subset_element!(ext_edges_sub, space_idx, 1, edge_idx1)
                 add_subset_element!(ext_xedges_sub, space_idx, 1, edge_idx1)
                 add_subset_element!(all_edges_sub, space_idx, 1, edge_idx1)
@@ -797,6 +800,9 @@ function record_regular_mesh!(
             if (j > 1)  # j-1 to j in the nlvl direction
                 edge_idx2 = edge_start2 + ii * e2_per_i + jjj
                 edges[edge_idx2].nodes = [node_idx, node_idx - n_per_j]
+                resize!(edges[edge_idx2].boundary, 2)
+                edges[edge_idx2].boundary[1].index = node_idx
+                edges[edge_idx2].boundary[2].index = node_idx - n_per_j
                 add_subset_element!(ext_edges_sub, space_idx, 1, edge_idx2)
                 add_subset_element!(ext_yedges_sub, space_idx, 1, edge_idx2)
                 add_subset_element!(all_edges_sub, space_idx, 1, edge_idx2)
@@ -812,6 +818,12 @@ function record_regular_mesh!(
                     node_idx - n_per_i - n_per_j,
                     node_idx - n_per_j,
                 ]
+                resize!(cells[cell_idx].boundary, 4)
+                cells[cell_idx].boundary[1].index = edge_idx1
+                cells[cell_idx].boundary[2].index = edge_idx2
+                cells[cell_idx].boundary[3].index = edge_idx1 - 1
+                cells[cell_idx].boundary[4].index = edge_idx2 - e2_per_i
+
                 add_subset_element!(ext_cells_sub, space_idx, 2, cell_idx)
                 add_subset_element!(all_cells_sub, space_idx, 2, cell_idx)
             end
