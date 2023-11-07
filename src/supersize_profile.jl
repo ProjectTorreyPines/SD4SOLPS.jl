@@ -928,8 +928,24 @@ function trim_ext_mesh_with_wall(
                     deleted_nodes = [deleted_nodes; node]
                 end
                 deleteat!(ext_cells_sub.element, i)
+            else
+                # Hard: cell is partly in bounds
+                # Find which nodes are out of bounds
+                # Find which edges are out of bounds or intersecting
+                # Delete all nodes and edges that aren't entirely in bounds
+                # Delete the cell
+                # Determine whether new nodes were already added by a previous cell
+                #   The last npol + 1 cells need to be considered based on the order
+                #   in which cells were added.
+                # Add new nodes that will be unique
+                # Determine whether new edges were already added by a previous cell
+                # Add new edges that will be unique
+                # Create new cell
+                # Reference the new boundary and nodes
+                p = LibGEOS.Point()
+                inter = GeoInterface.coordinates(inter)[1]
             end
-            # inter = GeoInterface.coordinates(inter)[1]
+            
         end
     end
     sub_edges = [ext_edges_sub.element[i].object[1].index for i in 1:length(ext_edges_sub.element)]
