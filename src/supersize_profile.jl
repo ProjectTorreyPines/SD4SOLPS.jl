@@ -8,7 +8,7 @@ using Interpolations: Interpolations
 using GGDUtils:
     GGDUtils, get_grid_subset_with_index, add_subset_element!, get_subset_boundary,
     project_prop_on_subset!, get_subset_centers
-using PolygonOps: PolygonOps
+using PolygonOps: PolygonOps, inpolygon
 using JSON: JSON
 
 export extrapolate_core
@@ -671,6 +671,40 @@ function modify_mesh_ext_near_x!(
     end
 end
 
+function identify_cutoff_cells(
+    dd::OMAS.dd,
+    r::Matrix{Float64},
+    z::Matrix{Float64},
+    pfr_transition::Int64,
+)
+    npol, nlvl = size(r)
+    okay = zeros(Bool, (npol - 1, nlvl - 1))
+    border = zeros(Bool, (npol - 1, nlvl - 1))
+    limiter = dd.wall.description_2d[1].limiter
+    wall_r = limiter.unit[1].outline.r
+    wall_z = limiter.unit[1].outline.z
+    poly = [[wall_r[i], wall_z[i]] for i ∈ 1:length(wall_r)]
+    poly = append!(poly, [[wall_r[1], wall_z[1]]])
+    inpoly = [[inpolygon([r[i, j], z[i, j]], poly) for j ∈ 1:nlvl] for i ∈ 1:npol]
+    wl = Matrix(reduce(hcat, inpoly)') .!= 0
+
+    for i ∈ 2:npol
+        if (i - 1) != pfr_transition
+            for j ∈ 2:nlvl
+                within = [wl[i, j], wl[i-1, j], wl[i-1, j-1], wl[i, j-1]]
+                okay[i-1, j-1] = all(within)
+                border[i-1, j-1] = (minimum(within) == 0) & (maximum(within) == 1)
+            end
+        end
+    end
+
+    fz = open("limiter.dat", "w")
+    for i ∈ 1:length(wall_r)
+        println(fz, wall_r[i], " ", wall_z[i])
+    end
+    return okay, border
+end
+
 #!format off
 """
     record_regular_mesh!()
@@ -979,6 +1013,17 @@ function mesh_extension_sol!(
     # The PFR flag needs to be respected; pfr nodes don't connect to non-pfr nodes
     pfr = rzpi.(mesh_r[:, 1], mesh_z[:, 1]) .< 1
     pfr_transition = argmax(abs.(diff(pfr)))
+    okay, border = identify_cutoff_cells(dd,mesh_r,mesh_z,pfr_transition)
+    fr = open("okay.dat", "w")
+    fz = open("border.dat", "w")
+    for i ∈ 1:(npol-1)
+        for j ∈ 1:(nlvl-1)
+            print(fr, okay[i, j], " ")
+            print(fz, border[i, j], " ")
+        end
+        println(fr, "")
+        println(fz, "")
+    end
     record_regular_mesh!(grid_ggd, space, mesh_r, mesh_z, pfr_transition)
     return mesh_r, mesh_z, pfr_transition
 end
