@@ -902,6 +902,8 @@ function trim_ext_mesh_with_wall(
     ext_yedges_sub = get_grid_subset_with_index(grid_ggd, -204)
     ext_cells_sub = get_grid_subset_with_index(grid_ggd, -205)
 
+    deleted_nodes = []
+    deleted_edges = []
     for j ∈ 1:length(ext_cells_sub.element)
         i = length(ext_cells_sub.element) - (j-1)
         nodes = o2.object[ext_cells_sub.element[i].index].nodes
@@ -914,15 +916,47 @@ function trim_ext_mesh_with_wall(
             # Problem! This cell needs modification.
             if cell_area == 0
                 # Easy: just delete this guy AND all his nodes
+                edges = o2.object[ext_cells_sub.element[i].index].boundary
+                edges = [edge.object[k].index for k in length(edge.object)]
                 deleteat!(o2.object, ext_cells_sub.element[i].index)
-                for node in nodes
-                    deleteat!(o1.object, node)
+                for edge in sort(edges, rev=true)
+                    deleteat!(o1.object, edge)
+                    deleted_edges = [deleted_edges; edge]
+                end
+                for node in sort(nodes, rev=true)
+                    deleteat!(o0.object, node)
+                    deleted_nodes = [deleted_nodes; node]
                 end
                 deleteat!(ext_cells_sub.element, i)
             end
             # inter = GeoInterface.coordinates(inter)[1]
         end
-        
+    end
+    sub_edges = [ext_edges_sub.element[i].object[1].index for i in 1:length(ext_edges_sub.element)]
+    sub_xedges = [ext_xedges_sub.element[i].object[1].index for i in 1:length(ext_xedges_sub.element)]
+    sub_yedges = [ext_yedges_sub.element[i].object[1].index for i in 1:length(ext_yedges_sub.element)]
+    for j in 1:length(sub_edges)
+        i = length(sub_edges) - (j-1)
+        if sub_edges[i] in deleted_edges
+            deleteat!(ext_edges_sub, i)
+        end
+        if i <= length(sub_xedges)
+            if sub_xedges[i] in deleted_edges
+                deleteat!(ext_xedges_sub, i)
+            end
+        end
+        if i <= length(sub_yedges)
+            if sub_yedges[i] in deleted_edges
+                deleteat!(ext_yedges_sub, i)
+            end
+        end
+    end
+    sub_nodes = [ext_nodes_sub.element[i].object[1].index for i in 1:length(ext_nodes_sub)]
+    for j in 1:length(sub_nodes)
+        i = length(sub_nodes) - (j-1)
+        if sub_nodes[i] in deleted_nodes
+            deleteat!(ext_nodes_sub, i)
+        end
     end
     # println("area of wall polygon:", LibGEOS.area(wall_poly))
 
