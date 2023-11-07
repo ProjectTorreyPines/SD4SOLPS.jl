@@ -10,6 +10,8 @@ using GGDUtils:
     project_prop_on_subset!, get_subset_centers
 using PolygonOps: PolygonOps, inpolygon
 using JSON: JSON
+using LibGEOS: LibGEOS, readgeom, intersection
+using GeoInterface: GeoInterface
 
 export extrapolate_core
 export fill_in_extrapolated_core_profile
@@ -685,18 +687,33 @@ function identify_cutoff_cells(
     wall_z = limiter.unit[1].outline.z
     poly = [[wall_r[i], wall_z[i]] for i ∈ 1:length(wall_r)]
     poly = append!(poly, [[wall_r[1], wall_z[1]]])
-    inpoly = [[inpolygon([r[i, j], z[i, j]], poly) for j ∈ 1:nlvl] for i ∈ 1:npol]
-    wl = Matrix(reduce(hcat, inpoly)') .!= 0
+    wall_poly = LibGEOS.Polygon([poly])
+    # inpoly = [[inpolygon([r[i, j], z[i, j]], poly) for j ∈ 1:nlvl] for i ∈ 1:npol]
+    # wl = Matrix(reduce(hcat, inpoly)') .!= 0
+    tolerance = 1e-7  # m^2
 
     for i ∈ 2:npol
         if (i - 1) != pfr_transition
             for j ∈ 2:nlvl
-                within = [wl[i, j], wl[i-1, j], wl[i-1, j-1], wl[i, j-1]]
-                okay[i-1, j-1] = all(within)
-                border[i-1, j-1] = (minimum(within) == 0) & (maximum(within) == 1)
+                cell_r = [r[i, j], r[i, j-1], r[i-1, j-1], r[i-1, j], r[i, j]]
+                cell_z = [z[i, j], z[i, j-1], z[i-1, j-1], z[i-1, j], z[i, j]]
+                cell = LibGEOS.Polygon([[[cell_r[k], cell_z[k]] for k in 1:length(cell_r)]])
+                # within = [wl[i, j], wl[i-1, j], wl[i-1, j-1], wl[i, j-1]]
+                # okay[i-1, j-1] = all(within)
+                # border[i-1, j-1] = (minimum(within) == 0) & (maximum(within) == 1)
+                cell_area = LibGEOS.area(cell)
+                inter = LibGEOS.intersection(wall_poly, cell)
+                inter_area = LibGEOS.area(inter)
+                okay[i-1, j-1] = abs(inter_area - cell_area) < tolerance
+                border[i-1, j-1] = 0 < inter_area < (cell_area - tolerance)
+                # println("i=",i,",j=",j,"okay=",okay[i-1,j-1],",ca=",cell_area,",ia=",inter_area)
+
+                # inter = GeoInterface.coordinates(inter)[1]
+
             end
         end
     end
+    # println("area of wall polygon:", LibGEOS.area(wall_poly))
 
     fz = open("limiter.dat", "w")
     for i ∈ 1:length(wall_r)
