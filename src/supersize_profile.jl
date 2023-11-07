@@ -715,10 +715,10 @@ function identify_cutoff_cells(
     end
     # println("area of wall polygon:", LibGEOS.area(wall_poly))
 
-    fz = open("limiter.dat", "w")
-    for i ∈ 1:length(wall_r)
-        println(fz, wall_r[i], " ", wall_z[i])
-    end
+    # fz = open("limiter.dat", "w")
+    # for i ∈ 1:length(wall_r)
+    #     println(fz, wall_r[i], " ", wall_z[i])
+    # end
     return okay, border
 end
 
@@ -874,6 +874,63 @@ function record_regular_mesh!(
             end
         end
     end
+end
+
+function trim_ext_mesh_with_wall(
+    dd::OMAS.dd;
+    grid_ggd_idx::Int64=1,
+    space_idx::Int64=1,
+)
+    limiter = dd.wall.description_2d[1].limiter
+    wall_r = limiter.unit[1].outline.r
+    wall_z = limiter.unit[1].outline.z
+    poly = [[wall_r[i], wall_z[i]] for i ∈ 1:length(wall_r)]
+    poly = append!(poly, [[wall_r[1], wall_z[1]]])
+    wall_poly = LibGEOS.Polygon([poly])
+    tolerance = 1e-7  # m^2
+
+    grid_ggd = dd.edge_profiles.grid_ggd[grid_ggd_idx]
+    space = grid_ggd.space[space_idx]
+
+    o0 = space.objects_per_dimension[1]  # Nodes
+    o1 = space.objects_per_dimension[2]  # Edges
+    o2 = space.objects_per_dimension[3]  # Cells (2D projection)
+
+    ext_nodes_sub = get_grid_subset_with_index(grid_ggd, -201)
+    ext_edges_sub = get_grid_subset_with_index(grid_ggd, -202)
+    ext_xedges_sub = get_grid_subset_with_index(grid_ggd, -203)
+    ext_yedges_sub = get_grid_subset_with_index(grid_ggd, -204)
+    ext_cells_sub = get_grid_subset_with_index(grid_ggd, -205)
+
+    for j ∈ 1:length(ext_cells_sub.element)
+        i = length(ext_cells_sub.element) - (j-1)
+        nodes = o2.object[ext_cells_sub.element[i].index].nodes
+        c = [[o0.object[n].geometry.r, o0.object[n].geometry.z] for n in nodes]
+        cell = LibGEOS.Polygon([c])
+        cell_area = LibGEOS.area(cell)
+        inter = LibGEOS.intersection(wall_poly, cell)
+        inter_area = LibGEOS.area(inter)
+        if abs(inter_area - cell_area) > tolerance
+            # Problem! This cell needs modification.
+            if cell_area == 0
+                # Easy: just delete this guy AND all his nodes
+                deleteat!(o2.object, ext_cells_sub.element[i].index)
+                for node in nodes
+                    deleteat!(o1.object, node)
+                end
+                deleteat!(ext_cells_sub.element, i)
+            end
+            # inter = GeoInterface.coordinates(inter)[1]
+        end
+        
+    end
+    # println("area of wall polygon:", LibGEOS.area(wall_poly))
+
+    fz = open("limiter.dat", "w")
+    for i ∈ 1:length(wall_r)
+        println(fz, wall_r[i], " ", wall_z[i])
+    end
+    return okay, border
 end
 
 """
