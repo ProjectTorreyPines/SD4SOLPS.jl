@@ -8,6 +8,7 @@ using Interpolations: Interpolations
 
 export find_files_in_allowed_folders
 export geqdsk_to_imas!
+export preparation
 
 include("$(@__DIR__)/supersize_profile.jl")
 include("$(@__DIR__)/repair_eq.jl")
@@ -168,6 +169,9 @@ function geqdsk_to_imas!(eqdsk_file, dd; time_index=1)
     resize!(limiter.unit, 1)
     limiter.unit[1].outline.r = g.rlim
     limiter.unit[1].outline.z = g.zlim
+
+    # Repair
+    add_rho_to_equilibrium!(dd)
     return
 end
 
