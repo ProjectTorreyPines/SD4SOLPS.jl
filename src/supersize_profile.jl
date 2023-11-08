@@ -6,9 +6,9 @@ Utilities for extrapolating profiles
 using OMAS: OMAS
 using Interpolations: Interpolations
 using GGDUtils:
-    GGDUtils, get_grid_subset_with_index, add_subset_element!, get_subset_boundary
+    GGDUtils, get_grid_subset_with_index, add_subset_element!, get_subset_boundary,
+    project_prop_on_subset!, get_subset_centers
 using PolygonOps: PolygonOps
-using SOLPS2IMAS: SOLPS2IMAS
 using JSON: JSON
 
 export extrapolate_core
@@ -173,7 +173,7 @@ function fill_in_extrapolated_core_profile!(
             quantity_str = getproperty(quantity_str, Symbol(tag))
         end
 
-        midplane_cell_centers, quantity = GGDUtils.project_prop_on_subset!(
+        midplane_cell_centers, quantity = project_prop_on_subset!(
             quantity_str,
             cell_subset,
             midplane_subset,
@@ -378,7 +378,7 @@ function mesh_psi_spacing(
     space = grid_ggd.space[space_idx]
     midplane_subset =
         get_grid_subset_with_index(grid_ggd, 11)
-    midplane_cell_centers = GGDUtils.get_subset_centers(space, midplane_subset)
+    midplane_cell_centers = get_subset_centers(space, midplane_subset)
     r_mesh = [midplane_cell_centers[i][1] for i ∈ eachindex(midplane_cell_centers)]
     z_mesh = [midplane_cell_centers[i][2] for i ∈ eachindex(midplane_cell_centers)]
     psin_mesh = rzpi.(r_mesh, z_mesh)
@@ -429,7 +429,7 @@ function pick_extension_psi_range(
     grid_ggd = dd.edge_profiles.grid_ggd[grid_ggd_idx]
     space = grid_ggd.space[space_idx]
     midplane_subset = get_grid_subset_with_index(grid_ggd, 11)
-    midplane_cell_centers = GGDUtils.get_subset_centers(space, midplane_subset)
+    midplane_cell_centers = get_subset_centers(space, midplane_subset)
     psin_midplane = rzpi.(midplane_cell_centers[end][1], midplane_cell_centers[end][2])
 
     # Choose contour levels
@@ -469,14 +469,7 @@ grid_ggd_idx: index within ggd
 space_idx: space number / index of the space to work with within edge_profiles
 Returns a tuple with vectors of R and Z starting points.
 """
-function pick_mesh_ext_starting_points(
-    dd::OMAS.dd;
-    grid_ggd_idx::Int64=1,
-    space_idx::Int64=1,
-)
-    grid_ggd = dd.edge_profiles.grid_ggd[grid_ggd_idx]
-    space = grid_ggd.space[space_idx]
-
+function pick_mesh_ext_starting_points(grid_ggd, space)
     # Choose starting points for the orthogonal (to the contour) gridlines
     # Use the existing cells of the standard mesh
     all_cell_subset = get_grid_subset_with_index(grid_ggd, 5)
@@ -484,13 +477,11 @@ function pick_mesh_ext_starting_points(
     core_edges = get_grid_subset_with_index(grid_ggd, 15)
     outer_target = get_grid_subset_with_index(grid_ggd, 13)
     inner_target = get_grid_subset_with_index(grid_ggd, 14)
-    ci = [core_edges.element[i].object[1].index for i ∈ 1:length(core_edges.element)]
-    oi =
-        [outer_target.element[i].object[1].index for i ∈ 1:length(outer_target.element)]
-    ii =
-        [inner_target.element[i].object[1].index for i ∈ 1:length(inner_target.element)]
+    ci = [ele.object[1].index for ele ∈ core_edges.element]
+    oi = [ele.object[1].index for ele ∈ outer_target.element]
+    ii = [ele.object[1].index for ele ∈ inner_target.element]
     border_edges = []
-    for i ∈ 1:length(all_border_edges)
+    for i ∈ eachindex(all_border_edges)
         bi = all_border_edges[i].object[1].index
         if !(bi in oi) & !(bi in ii) & !(bi in ci)
             border_edges = [border_edges; all_border_edges[i]]
@@ -522,13 +513,13 @@ of psi_N is large compared to its gradient).
 r_eq: Equilibrium reconstruction's grid, R coordinates
 z_eq: Equilibrium reconstruction's grid, Z coordinates
 psin_eq: Normalized poloidal flux in the equilibrium reconstruction as a function of R and Z
-rzpi: linear interpolation of psin_eq() as a function of r_eq and z_eq
-    This was probably already computed and I think time would be saved by reusing it.
-    If you don't already have it, you can pass in nothing and let this function calculate it.
 rstart: R coordinates of starting points for the gradient following.
 zstart: Z coordinates of starting points
 nlvl: number of nodes to drop while following the gradient
 dpsin: node spacing in delta psi_N
+rzpi: linear interpolation of psin_eq() as a function of r_eq and z_eq
+    This was probably already computed and I think time would be saved by reusing it.
+    If you don't already have it, you can pass in nothing and let this function calculate it.
 
 Returns two matrices with R and Z coordinates of the mesh extension
 """
@@ -537,11 +528,11 @@ function mesh_ext_follow_grad(
     r_eq::Vector{Float64},
     z_eq::Vector{Float64},
     psin_eq::Matrix,
-    rzpi,
     rstart::Vector{Float64},
     zstart::Vector{Float64},
     nlvl::Int64,
     dpsin::Float64,
+    rzpi=nothing,
 )
     npol = length(rstart)
     mesh_r = zeros((npol, nlvl))
@@ -598,7 +589,11 @@ eqt: equilibrium.time_slice information
 mesh_r: matrix of R values for the extended mesh
 mesh_z: matrix of Z values for the extended mesh
 """
-function modify_mesh_ext_near_x!(eqt, mesh_r, mesh_z)
+function modify_mesh_ext_near_x!(
+    eqt::OMAS.equilibrium__time_slice,
+    mesh_r::Matrix{Float64},
+    mesh_z::Matrix{Float64},
+)
     # There's a special path; the one that probably should've gone through the
     # secondary X-point (if there is one). Any numerical error will make this
     # path miss the X-point and go off to somewhere crazy instead, so instead of
@@ -681,9 +676,8 @@ end
     record_regular_mesh!()
 
 Records arrays of mesh data from regular 2D arrays into the DD
-dd: the data dictionary
-grid_ggd_idx: index of the grid_ggd within edge_profiles
-space_idx: index of the space in edge_profiles
+grid_ggd: grid_ggd within edge_profiles
+space: space in edge_profiles
 mesh_r: Matrix of R values along a mesh. Should be 2D. The two dimensions are in
         the radial and poloidal directions.
 mesh_z: Z values to go with mesh_r.
@@ -693,20 +687,19 @@ cut: Poloidal index of a cut between two groups of disconnected cells. Poloidal
 """
 #!format on
 function record_regular_mesh!(
-    dd::OMAS.dd,
-    grid_ggd_idx::Int64,
-    space_idx::Int64,
+    grid_ggd,
+    space,
     mesh_r::Matrix{Float64},
     mesh_z::Matrix{Float64},
     cut::Int64,
 )
-    grid_ggd = dd.edge_profiles.grid_ggd[grid_ggd_idx]
-    space = grid_ggd.space[space_idx]
-
     npol, nlvl = size(mesh_r)
     o0 = space.objects_per_dimension[1]  # Nodes
     o1 = space.objects_per_dimension[2]  # Edges
     o2 = space.objects_per_dimension[3]  # Cells (2D projection)
+    node_dim = 1
+    edge_dim = 2
+    cell_dim = 3
 
     n_old_node = length(o0.object)
     n_new_node = nlvl * npol
@@ -770,6 +763,7 @@ function record_regular_mesh!(
     nodes = resize!(o0.object, n_nodes)
     edges = resize!(o1.object, n_edges)
     cells = resize!(o2.object, n_cells)
+    space_idx = space.identifier.index
     for i ∈ 1:npol
         pastpc = i > cut
         for j ∈ 1:nlvl
@@ -782,8 +776,8 @@ function record_regular_mesh!(
             # Nodes
             node_idx = node_start + ii * n_per_i + jj
             nodes[node_idx].geometry = [mesh_r[i, j], mesh_z[i, j]]
-            add_subset_element!(ext_nodes_sub, space_idx, 0, node_idx)
-            add_subset_element!(all_nodes_sub, space_idx, 0, node_idx)
+            add_subset_element!(ext_nodes_sub, space_idx, node_dim, node_idx)
+            add_subset_element!(all_nodes_sub, space_idx, node_dim, node_idx)
 
             # Edges
             if (i > 1) & (i != cut)  # i-1 to i  in the npol direction
@@ -792,10 +786,10 @@ function record_regular_mesh!(
                 resize!(edges[edge_idx1].boundary, 2)
                 edges[edge_idx1].boundary[1].index = node_idx
                 edges[edge_idx1].boundary[2].index = node_idx - n_per_i
-                add_subset_element!(ext_edges_sub, space_idx, 1, edge_idx1)
-                add_subset_element!(ext_xedges_sub, space_idx, 1, edge_idx1)
-                add_subset_element!(all_edges_sub, space_idx, 1, edge_idx1)
-                add_subset_element!(all_xedges_sub, space_idx, 1, edge_idx1)
+                add_subset_element!(ext_edges_sub, space_idx, edge_dim, edge_idx1)
+                add_subset_element!(ext_xedges_sub, space_idx, edge_dim, edge_idx1)
+                add_subset_element!(all_edges_sub, space_idx, edge_dim, edge_idx1)
+                add_subset_element!(all_xedges_sub, space_idx, edge_dim, edge_idx1)
             end
             if (j > 1)  # j-1 to j in the nlvl direction
                 edge_idx2 = edge_start2 + ii * e2_per_i + jjj
@@ -803,10 +797,10 @@ function record_regular_mesh!(
                 resize!(edges[edge_idx2].boundary, 2)
                 edges[edge_idx2].boundary[1].index = node_idx
                 edges[edge_idx2].boundary[2].index = node_idx - n_per_j
-                add_subset_element!(ext_edges_sub, space_idx, 1, edge_idx2)
-                add_subset_element!(ext_yedges_sub, space_idx, 1, edge_idx2)
-                add_subset_element!(all_edges_sub, space_idx, 1, edge_idx2)
-                add_subset_element!(all_yedges_sub, space_idx, 1, edge_idx2)
+                add_subset_element!(ext_edges_sub, space_idx, edge_dim, edge_idx2)
+                add_subset_element!(ext_yedges_sub, space_idx, edge_dim, edge_idx2)
+                add_subset_element!(all_edges_sub, space_idx, edge_dim, edge_idx2)
+                add_subset_element!(all_yedges_sub, space_idx, edge_dim, edge_idx2)
             end
 
             # Cells
@@ -824,8 +818,8 @@ function record_regular_mesh!(
                 cells[cell_idx].boundary[3].index = edge_idx1 - 1
                 cells[cell_idx].boundary[4].index = edge_idx2 - e2_per_i
 
-                add_subset_element!(ext_cells_sub, space_idx, 2, cell_idx)
-                add_subset_element!(all_cells_sub, space_idx, 2, cell_idx)
+                add_subset_element!(ext_cells_sub, space_idx, cell_dim, cell_idx)
+                add_subset_element!(all_cells_sub, space_idx, cell_dim, cell_idx)
             end
         end
     end
@@ -899,9 +893,8 @@ function cached_mesh_extension!(
         npol = md["npol"]
         nlvl = md["nlvl"]
         record_regular_mesh!(
-            dd,
-            grid_ggd_idx,
-            space_idx,
+            dd.edge_profiles.grid_ggd[grid_ggd_idx],
+            dd.edge_profiles.grid_ggd[grid_ggd_idx].space[space_idx],
             mesh_r,
             mesh_z,
             pfr_transition,
@@ -965,18 +958,17 @@ function mesh_extension_sol!(
     )
     nlvl = length(psin_levels)
     dpsin = psin_levels[2] - psin_levels[1]
-    grad_start_r, grad_start_z =
-        pick_mesh_ext_starting_points(dd; grid_ggd_idx, space_idx)
+    grad_start_r, grad_start_z = pick_mesh_ext_starting_points(grid_ggd, space)
     npol = length(grad_start_r)
     mesh_r, mesh_z = mesh_ext_follow_grad(
         r_eq,
         z_eq,
         psin_eq,
-        rzpi,
         grad_start_r,
         grad_start_z,
         nlvl,
         dpsin,
+        rzpi,
     )
     modify_mesh_ext_near_x!(eqt, mesh_r, mesh_z)
 
@@ -987,7 +979,7 @@ function mesh_extension_sol!(
     # The PFR flag needs to be respected; pfr nodes don't connect to non-pfr nodes
     pfr = rzpi.(mesh_r[:, 1], mesh_z[:, 1]) .< 1
     pfr_transition = argmax(abs.(diff(pfr)))
-    record_regular_mesh!(dd, grid_ggd_idx, space_idx, mesh_r, mesh_z, pfr_transition)
+    record_regular_mesh!(grid_ggd, space, mesh_r, mesh_z, pfr_transition)
     return mesh_r, mesh_z, pfr_transition
 end
 

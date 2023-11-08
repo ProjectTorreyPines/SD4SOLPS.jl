@@ -242,14 +242,10 @@ if args["edge_profile_extension"]
             std_sub = get_grid_subset_with_index(grid_ggd, -j)
             all_sub = get_grid_subset_with_index(grid_ggd, j)
             ext_sub = get_grid_subset_with_index(grid_ggd, -200 - j)
-            no = length(orig_sub.element)
-            ns = length(std_sub.element)
-            na = length(all_sub.element)
-            ne = length(ext_sub.element)
-            orig_indices = [orig_sub.element[i].object[1].index for i ∈ 1:no]
-            std_indices = [std_sub.element[i].object[1].index for i ∈ 1:ns]
-            all_indices = [all_sub.element[i].object[1].index for i ∈ 1:na]
-            ext_indices = [ext_sub.element[i].object[1].index for i ∈ 1:ne]
+            orig_indices = [ele.object[1].index for ele ∈ orig_sub.element]
+            std_indices = [ele.object[1].index for ele ∈ std_sub.element]
+            all_indices = [ele.object[1].index for ele ∈ all_sub.element]
+            ext_indices = [ele.object[1].index for ele ∈ ext_sub.element]
             @test std_sub.identifier.index == -j
             @test all(orig_indices .== std_indices)
             all_indices_reconstruct = [std_indices; ext_indices]
