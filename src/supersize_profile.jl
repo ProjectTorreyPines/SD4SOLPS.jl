@@ -876,7 +876,7 @@ function record_regular_mesh!(
     end
 end
 
-function trim_ext_mesh_with_wall(
+function trim_ext_mesh_with_wall!(
     dd::OMAS.dd;
     grid_ggd_idx::Int64=1,
     space_idx::Int64=1,
@@ -902,33 +902,42 @@ function trim_ext_mesh_with_wall(
     ext_yedges_sub = get_grid_subset_with_index(grid_ggd, -204)
     ext_cells_sub = get_grid_subset_with_index(grid_ggd, -205)
 
+    all_nodes_sub = get_grid_subset_with_index(grid_ggd, 1)
+    all_edges_sub = get_grid_subset_with_index(grid_ggd, 2)
+    all_xedges_sub = get_grid_subset_with_index(grid_ggd, 3)
+    all_yedges_sub = get_grid_subset_with_index(grid_ggd, 4)
+    all_cells_sub = get_grid_subset_with_index(grid_ggd, 5)
+
     deleted_nodes = []
     deleted_edges = []
-    for j ∈ 1:length(ext_cells_sub.element)
-        i = length(ext_cells_sub.element) - (j-1)
-        nodes = o2.object[ext_cells_sub.element[i].index].nodes
-        c = [[o0.object[n].geometry.r, o0.object[n].geometry.z] for n in nodes]
+    deleted_cells = []
+    ext_cells = length(ext_cells_sub.element)
+    for j ∈ 1:ext_cells
+        i = ext_cells - (j-1)
+        cell_idx = ext_cells_sub.element[i].object[1].index
+        nodes = o2.object[cell_idx].nodes
+        c = [[o0.object[n].geometry[1], o0.object[n].geometry[2]] for n in nodes]
+        c = [c; [c[1]]]
         cell = LibGEOS.Polygon([c])
         cell_area = LibGEOS.area(cell)
         inter = LibGEOS.intersection(wall_poly, cell)
         inter_area = LibGEOS.area(inter)
         if abs(inter_area - cell_area) > tolerance
+            # print("cell ", i, " has problem: inter=", inter_area, ",cell=",cell_area)
             # Problem! This cell needs modification.
-            if cell_area == 0
+            if inter_area == 0
+                # println(", inter area is 0")
                 # Easy: just delete this guy AND all his nodes
-                edges = o2.object[ext_cells_sub.element[i].index].boundary
-                edges = [edge.object[k].index for k in length(edge.object)]
-                deleteat!(o2.object, ext_cells_sub.element[i].index)
-                for edge in sort(edges, rev=true)
-                    deleteat!(o1.object, edge)
-                    deleted_edges = [deleted_edges; edge]
-                end
-                for node in sort(nodes, rev=true)
-                    deleteat!(o0.object, node)
-                    deleted_nodes = [deleted_nodes; node]
-                end
+                edges = o2.object[ext_cells_sub.element[i].object[1].index].boundary
+                edges = [edge.index for edge in edges]
+                deleted_edges = [deleted_edges; edges]
+                deleted_nodes = [deleted_nodes; nodes]
+                
                 deleteat!(ext_cells_sub.element, i)
+                # deleteat!(o2.object, cell_idx)
+                deleted_cells = [deleted_cells; i]
             else
+                # println("cell area is not 0")
                 # Hard: cell is partly in bounds
                 # Find which nodes are out of bounds
                 # Find which edges are out of bounds or intersecting
@@ -942,45 +951,89 @@ function trim_ext_mesh_with_wall(
                 # Add new edges that will be unique
                 # Create new cell
                 # Reference the new boundary and nodes
-                p = LibGEOS.Point()
+                # p = LibGEOS.Point()
                 inter = GeoInterface.coordinates(inter)[1]
             end
             
         end
     end
-    sub_edges = [ext_edges_sub.element[i].object[1].index for i in 1:length(ext_edges_sub.element)]
-    sub_xedges = [ext_xedges_sub.element[i].object[1].index for i in 1:length(ext_xedges_sub.element)]
-    sub_yedges = [ext_yedges_sub.element[i].object[1].index for i in 1:length(ext_yedges_sub.element)]
-    for j in 1:length(sub_edges)
-        i = length(sub_edges) - (j-1)
-        if sub_edges[i] in deleted_edges
-            deleteat!(ext_edges_sub, i)
+    println("# deleted edges = ", length(deleted_edges))
+    sub_edges = [ele.object[1].index for ele in ext_edges_sub.element]
+    sub_xedges = [ele.object[1].index for ele in ext_xedges_sub.element]
+    sub_yedges = [ele.object[1].index for ele in ext_yedges_sub.element]
+    asub_edges = [ele.object[1].index for ele in all_edges_sub.element]
+    asub_xedges = [ele.object[1].index for ele in all_xedges_sub.element]
+    asub_yedges = [ele.object[1].index for ele in all_yedges_sub.element]
+    unique!(sort!(deleted_nodes, rev=true))
+    unique!(sort!(deleted_edges, rev=true))
+    nae = length(asub_edges)
+    for j in 1:nae
+        i = nae - (j-1)
+        if i <= length(sub_edges)
+            if sub_edges[i] in deleted_edges
+                deleteat!(ext_edges_sub.element, i)
+            end
         end
         if i <= length(sub_xedges)
             if sub_xedges[i] in deleted_edges
-                deleteat!(ext_xedges_sub, i)
+                deleteat!(ext_xedges_sub.element, i)
             end
         end
         if i <= length(sub_yedges)
             if sub_yedges[i] in deleted_edges
-                deleteat!(ext_yedges_sub, i)
+                deleteat!(ext_yedges_sub.element, i)
+            end
+        end
+        if asub_edges[i] in deleted_edges
+            deleteat!(all_edges_sub.element, i)
+        end
+        if i <= length(asub_xedges)
+            if asub_xedges[i] in deleted_edges
+                deleteat!(all_xedges_sub.element, i)
+            end
+        end
+        if i <= length(asub_yedges)
+            if asub_yedges[i] in deleted_edges
+                deleteat!(all_yedges_sub.element, i)
             end
         end
     end
-    sub_nodes = [ext_nodes_sub.element[i].object[1].index for i in 1:length(ext_nodes_sub)]
-    for j in 1:length(sub_nodes)
-        i = length(sub_nodes) - (j-1)
-        if sub_nodes[i] in deleted_nodes
-            deleteat!(ext_nodes_sub, i)
+    sub_nodes = [ele.object[1].index for ele in ext_nodes_sub.element]
+    asub_nodes = [ele.object[1].index for ele in all_nodes_sub.element]
+    an = length(asub_nodes)
+    for j in 1:an
+        i = an - (j-1)
+        if asub_nodes[i] in deleted_nodes
+            deleteat!(all_nodes_sub.element, i)
+        end
+        if i <= length(sub_nodes)
+            if sub_nodes[i] in deleted_nodes
+                deleteat!(ext_nodes_sub.element, i)
+            end
+        end
+    end
+    asub_cells = [ele.object[1].index for ele in all_cells_sub.element]
+    nac = length(asub_cells)
+    for j in 1:nac
+        i = nac - (j - 1)
+        if asub_cells[i] in deleted_cells
+            deleteat!(all_cells_sub.element, i)
         end
     end
     # println("area of wall polygon:", LibGEOS.area(wall_poly))
+    # println("length(o0.object)=",length(o0.object), ", maximum(deleted_nodes)=",maximum(deleted_nodes))
+    # for node in deleted_nodes
+    #     deleteat!(o0.object, node)
+    # end
+    for edge in deleted_edges
+        deleteat!(o1.object, edge)
+    end
 
     fz = open("limiter.dat", "w")
     for i ∈ 1:length(wall_r)
         println(fz, wall_r[i], " ", wall_z[i])
     end
-    return okay, border
+    return
 end
 
 """
@@ -1137,18 +1190,19 @@ function mesh_extension_sol!(
     # The PFR flag needs to be respected; pfr nodes don't connect to non-pfr nodes
     pfr = rzpi.(mesh_r[:, 1], mesh_z[:, 1]) .< 1
     pfr_transition = argmax(abs.(diff(pfr)))
-    okay, border = identify_cutoff_cells(dd,mesh_r,mesh_z,pfr_transition)
-    fr = open("okay.dat", "w")
-    fz = open("border.dat", "w")
-    for i ∈ 1:(npol-1)
-        for j ∈ 1:(nlvl-1)
-            print(fr, okay[i, j], " ")
-            print(fz, border[i, j], " ")
-        end
-        println(fr, "")
-        println(fz, "")
-    end
+    # okay, border = identify_cutoff_cells(dd,mesh_r,mesh_z,pfr_transition)
+    # fr = open("okay.dat", "w")
+    # fz = open("border.dat", "w")
+    # for i ∈ 1:(npol-1)
+    #     for j ∈ 1:(nlvl-1)
+    #         print(fr, okay[i, j], " ")
+    #         print(fz, border[i, j], " ")
+    #     end
+    #     println(fr, "")
+    #     println(fz, "")
+    # end
     record_regular_mesh!(grid_ggd, space, mesh_r, mesh_z, pfr_transition)
+    trim_ext_mesh_with_wall!(dd; grid_ggd_idx=grid_ggd_idx, space_idx=space_idx)
     return mesh_r, mesh_z, pfr_transition
 end
 
