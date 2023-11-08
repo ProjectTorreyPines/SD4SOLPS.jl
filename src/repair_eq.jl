@@ -48,7 +48,7 @@ function add_rho_to_equilibrium!(dd::OMAS.dd)
         psi = eqt.profiles_1d.psi
         n = length(psi)
         if (length(eqt.profiles_1d.rho_tor_norm) > 0)
-            if max(eqt.profiles_1d.rho_tor_norm) > 0
+            if maximum(eqt.profiles_1d.rho_tor_norm) > 0
                 println("Slice #", it, " already has a rho_tor_norm profile; skipping")
                 continue
             end
