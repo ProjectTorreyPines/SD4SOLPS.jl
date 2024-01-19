@@ -7,7 +7,7 @@ using Interpolations: Interpolations
 #import GGDUtils
 
 export find_files_in_allowed_folders
-export geqdsk_to_imas
+export geqdsk_to_imas!
 
 include("$(@__DIR__)/supersize_profile.jl")
 include("$(@__DIR__)/repair_eq.jl")
@@ -63,12 +63,12 @@ function find_files_in_allowed_folders(
 end
 
 """
-    geqdsk_to_imas()
+    geqdsk_to_imas!()
 
 Transfers the equilibrium reconstruction in an EFIT-style gEQDSK file into
 the IMAS DD structure.
 """
-function geqdsk_to_imas(eqdsk_file, dd; time_index=1)
+function geqdsk_to_imas!(eqdsk_file, dd; time_index=1)
     # https://github.com/JuliaFusion/EFIT.jl/blob/master/src/io.jl
     g = EFIT.readg(eqdsk_file)
     # Copying ideas from OMFIT: omfit/omfit_classes/omfit_eqdsk.py / to_omas()
@@ -122,6 +122,39 @@ function geqdsk_to_imas(eqdsk_file, dd; time_index=1)
         gq.q_min.rho_tor_norm = g.rhovn[qmin_idx]
     end
 
+    # X-points
+    xrs, xzs, xpsins, xseps = EFIT.x_points(g; within_limiter_only=false)
+    if length(xrs) > 0
+        bx = eqt.boundary.x_point
+        resize!(bx, length(xrs))
+        for i ∈ length(xrs)
+            bx[i].r = xrs[i]
+            bx[i].z = xzs[i]
+        end
+        nprim = sum(xseps .== 1)
+        if nprim > 0
+            bsx = eqt.boundary_separatrix.x_point
+            resize!(bsx, nprim)
+            xrprim = xrs[xseps.==1]
+            xzprim = xzs[xseps.==1]
+            for i ∈ nprim
+                bsx[i].r = xrprim[i]
+                bsx[i].z = xzprim[i]
+            end
+        end
+        nsec = sum(xseps .== 2)
+        if nsec > 0
+            bssx = eqt.boundary_secondary_separatrix.x_point
+            resize!(bssx, nsec)
+            xrsec = xrs[xseps.==2]
+            xzsec = xzs[xseps.==2]
+            for i ∈ nsec
+                bssx[i].r = xrsec[i]
+                bssx[i].z = xzsec[i]
+            end
+        end
+    end
+
     # Boundary / LCFS
     eqt.boundary.outline.r = g.rbbbs
     eqt.boundary.outline.z = g.zbbbs
@@ -134,7 +167,8 @@ function geqdsk_to_imas(eqdsk_file, dd; time_index=1)
     limiter.type.description = "first wall"
     resize!(limiter.unit, 1)
     limiter.unit[1].outline.r = g.rlim
-    return limiter.unit[1].outline.z = g.zlim
+    limiter.unit[1].outline.z = g.zlim
+    return
 end
 
 """
@@ -238,7 +272,7 @@ function preparation(
     println("    eqdsk = ", eqdsk)
 
     dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time, gridspec, b2mn)
-    geqdsk_to_imas(eqdsk, dd)
+    geqdsk_to_imas!(eqdsk, dd)
     println("Loaded input data into IMAS DD")
 
     fill_in_extrapolated_core_profile!(dd, "electrons.density"; method=core_method)
@@ -246,6 +280,7 @@ function preparation(
     # ... more profiles here as they become available in b2time
     println("Extrapolated core profiles")
 
+    cached_mesh_extension!(dd, eqdsk_file, b2fgmtry)
     fill_in_extrapolated_edge_profile!(dd, "electrons.density"; method=core_method)
     # ... more profiles here
     println("Extrapolated edge profiles (but not really (placeholder only))")

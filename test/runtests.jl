@@ -7,6 +7,7 @@ using Test
 using Unitful: Unitful
 using Interpolations: Interpolations
 using ArgParse: ArgParse
+using GGDUtils: GGDUtils, get_grid_subset_with_index
 
 function parse_commandline()
     s = ArgParse.ArgParseSettings(; description="Run tests. Default is all tests.")
@@ -108,7 +109,7 @@ function define_default_sample_set()
     b2fgmtry, b2time, b2mn, gridspec, eqdsk = file_list
     eqdsk =
         splitdir(pathof(SD4SOLPS))[1] *
-        "/../sample/ITER_Lore_2296_00000/EQDSK/Baseline2008-li0.70.x4.mod2.eqdsk"
+        "/../sample/ITER_Lore_2296_00000/EQDSK/g002296.00200"
     return b2fgmtry, b2time, b2mn, gridspec, eqdsk
 end
 
@@ -185,7 +186,7 @@ if args["core_profile_extension"]
         @test isfile(gridspec)
         @test isfile(eqdsk)
         dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time, gridspec, b2mn)
-        SD4SOLPS.geqdsk_to_imas(eqdsk, dd)
+        SD4SOLPS.geqdsk_to_imas!(eqdsk, dd)
         rho = dd.equilibrium.time_slice[1].profiles_1d.rho_tor_norm
 
         if !SD4SOLPS.check_rho_1d(dd; time_slice=1)
@@ -221,10 +222,45 @@ if args["edge_profile_extension"]
         # Test for getting mesh spacing
         b2fgmtry, b2time, b2mn, gridspec, eqdsk = define_default_sample_set()
         dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time, gridspec, b2mn)
-        SD4SOLPS.geqdsk_to_imas(eqdsk, dd)
+        SD4SOLPS.geqdsk_to_imas!(eqdsk, dd)
         dpsin = SD4SOLPS.mesh_psi_spacing(dd)
         @test dpsin > 0.0
 
+        # Extend the mesh
+        grid_ggd_idx = 1
+        grid_ggd = dd.edge_profiles.grid_ggd[grid_ggd_idx]
+        extended_subs = 1:5
+        orig_subs = [
+            deepcopy(get_grid_subset_with_index(grid_ggd, i)) for
+            i ∈ extended_subs
+        ]
+        cfn = SD4SOLPS.cached_mesh_extension!(dd, eqdsk, b2fgmtry; clear_cache=true)
+        println("cleared ext mesh cache: ", cfn)
+        SD4SOLPS.cached_mesh_extension!(dd, eqdsk, b2fgmtry; grid_ggd_idx=grid_ggd_idx)
+        for j ∈ extended_subs
+            orig_sub = orig_subs[j]
+            std_sub = get_grid_subset_with_index(grid_ggd, -j)
+            all_sub = get_grid_subset_with_index(grid_ggd, j)
+            ext_sub = get_grid_subset_with_index(grid_ggd, -200 - j)
+            orig_indices = [ele.object[1].index for ele ∈ orig_sub.element]
+            std_indices = [ele.object[1].index for ele ∈ std_sub.element]
+            all_indices = [ele.object[1].index for ele ∈ all_sub.element]
+            ext_indices = [ele.object[1].index for ele ∈ ext_sub.element]
+            @test std_sub.identifier.index == -j
+            @test all(orig_indices .== std_indices)
+            all_indices_reconstruct = [std_indices; ext_indices]
+            @test all(all_indices .== all_indices_reconstruct)
+
+            # Verify that original and standard are separate and not refs to each other
+            arbitrary_change = 5
+            arb_el = 2
+            orig_sub.element[arb_el].object[1].index += arbitrary_change
+            @test orig_sub.element[arb_el].object[1].index !=
+                  std_sub.element[arb_el].object[1].index
+            orig_sub.element[arb_el].object[1].index -= arbitrary_change
+        end
+
+        # Prepare profiles that need to be extended
         n_edge = 47
         n_outer_prof = 13
         quantity_edge =
@@ -260,7 +296,7 @@ if args["heavy_utilities"]
         dd = OMAS.dd()
         eqdsk_file =
             splitdir(pathof(SD4SOLPS))[1] * "/../sample/geqdsk_iter_small_sample"
-        SD4SOLPS.geqdsk_to_imas(eqdsk_file, dd)
+        SD4SOLPS.geqdsk_to_imas!(eqdsk_file, dd)
         quantity = "electrons.density"
         prof_time_idx = eq_time_idx = 1
         resize!(dd.core_profiles.profiles_1d, prof_time_idx)
@@ -293,7 +329,7 @@ if args["repair_eq"]
         # Prepare sample
         dd = OMAS.dd()
         eqdsk = splitdir(pathof(SD4SOLPS))[1] * "/../sample/geqdsk_iter_small_sample"
-        SD4SOLPS.geqdsk_to_imas(eqdsk, dd)
+        SD4SOLPS.geqdsk_to_imas!(eqdsk, dd)
         # Make sure rho is missing
         nt = length(dd.equilibrium.time_slice)
         for it ∈ 1:nt
@@ -324,7 +360,7 @@ if args["geqdsk_to_imas"]
         for sample_file ∈ sample_files
             println(sample_file)
             dd = OMAS.dd()
-            SD4SOLPS.geqdsk_to_imas(sample_file, dd; time_index=tslice)
+            SD4SOLPS.geqdsk_to_imas!(sample_file, dd; time_index=tslice)
             eqt = dd.equilibrium.time_slice[tslice]
 
             # global
@@ -375,6 +411,16 @@ if args["geqdsk_to_imas"]
 
             # derived
             @test gq.q_axis == p1.q[1]
+
+            # X-points
+            bx = eqt.boundary.x_point
+            bsx = eqt.boundary_separatrix.x_point
+            bssx = eqt.boundary_secondary_separatrix.x_point
+            nxpt = length(bx)
+            nprim = length(bsx)
+            nsec = length(bssx)
+            @test nxpt >= 1
+            @test nxpt >= (nprim + nsec)
 
             # wall
             limiter = dd.wall.description_2d[1].limiter

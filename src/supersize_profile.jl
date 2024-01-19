@@ -5,11 +5,16 @@ Utilities for extrapolating profiles
 # import CalculusWithJulia
 using OMAS: OMAS
 using Interpolations: Interpolations
-using GGDUtils: GGDUtils
+using GGDUtils:
+    GGDUtils, get_grid_subset_with_index, add_subset_element!, get_subset_boundary,
+    project_prop_on_subset!, get_subset_centers
+using PolygonOps: PolygonOps
+using JSON: JSON
 
 export extrapolate_core
 export fill_in_extrapolated_core_profile
 export mesh_psi_spacing
+export find_x_points!
 
 """
     cumul_integrate(x::AbstractVector, y::AbstractVector)
@@ -132,9 +137,9 @@ function fill_in_extrapolated_core_profile!(
     grid_ggd = dd.edge_profiles.grid_ggd[grid_ggd_idx]
     space = grid_ggd.space[space_idx]
     cell_subset =
-        SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 5)
+        get_grid_subset_with_index(grid_ggd, 5)
     midplane_subset =
-        SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 11)
+        get_grid_subset_with_index(grid_ggd, 11)
 
     if length(midplane_subset.element) < 1
         throw(
@@ -168,7 +173,7 @@ function fill_in_extrapolated_core_profile!(
             quantity_str = getproperty(quantity_str, Symbol(tag))
         end
 
-        midplane_cell_centers, quantity = GGDUtils.project_prop_on_subset!(
+        midplane_cell_centers, quantity = project_prop_on_subset!(
             quantity_str,
             cell_subset,
             midplane_subset,
@@ -205,10 +210,8 @@ function fill_in_extrapolated_core_profile!(
         in_bounds =
             (r .< maximum(r_eq)) .& (r .> minimum(r_eq)) .& (z .> minimum(z_eq)) .&
             (z .< maximum(z_eq))
-        # println(in_bounds)
         psi_for_quantity = 10.0 .+ zeros(length(r))
         psi_for_quantity[in_bounds] = rzpi.(r[in_bounds], z[in_bounds])
-        # println(length(psi1_eq), ", ", length(rho1_eq))
         rho_for_quantity = copy(psi_for_quantity)
         in_bounds = psi_for_quantity .<= 1.0
         dpsi = diff(psi1_eq)
@@ -279,6 +282,31 @@ function extrapolate_edge_exp(
     return y0 * exp(-x ./ lambda)
 end
 
+"""
+    prep_flux_map()
+
+Reads equilibrium data and extracts/derives some useful quantities.
+This is very basic, but it was being repeated and that's a no-no.
+Returns:
+
+  - R values of the equilibrium grid
+  - Z values of the eq grid
+  - normalized poloidal flux on the equilibrium grid
+  - a linear interpolation of norm pol flux vs. R and Z, ready to be evaluated
+"""
+function prep_flux_map(dd::OMAS.dd; eq_time_idx::Int64=1, eq_profiles_2d_idx::Int64=1)
+    eqt = dd.equilibrium.time_slice[eq_time_idx]
+    p2 = eqt.profiles_2d[eq_profiles_2d_idx]
+    r_eq = p2.grid.dim1
+    z_eq = p2.grid.dim2
+    psi = p2.psi
+    psia = eqt.global_quantities.psi_axis
+    psib = eqt.global_quantities.psi_boundary
+    psin_eq = (psi .- psia) ./ (psib - psia)
+    rzpi = Interpolations.LinearInterpolation((r_eq, z_eq), psin_eq)
+    return r_eq, z_eq, psin_eq, rzpi
+end
+
 #! format off
 """
     mesh_psi_spacing(
@@ -305,6 +333,10 @@ grid_ggd_idx: index of the grid_ggd to use. For a typical SOLPS run, the SOLPS g
               is used, then this index will need to be specified.
 space_idx: index of the space to use. For a typical SOLPS run, there will be only one
            space so this index will mostly remain at 1.
+avoid_guard_cell: assume that the last cell is a guard cell so take end-2 and end-1
+                  instead of end and end-1
+spacing_rule: "edge" or "mean" to make spacing of new cells (in psi_N) be the same
+              as the spacing at the edge of the mesh, or the same as the average spacing
 """
 #! format on
 function mesh_psi_spacing(
@@ -313,6 +345,8 @@ function mesh_psi_spacing(
     eq_profiles_2d_idx::Int64=1,
     grid_ggd_idx::Int64=1,
     space_idx::Int64=1,
+    avoid_guard_cell::Bool=true,
+    spacing_rule="mean",
 )
     # Inspect input
     if length(dd.equilibrium.time_slice) < eq_time_idx
@@ -335,17 +369,7 @@ function mesh_psi_spacing(
     end
 
     # Get flux map
-    eqt = dd.equilibrium.time_slice[eq_time_idx]
-    p2 = eqt.profiles_2d[eq_profiles_2d_idx]
-    r_eq = p2.grid.dim1
-    z_eq = p2.grid.dim2
-    psi = p2.psi
-    psia = eqt.global_quantities.psi_axis
-    psib = eqt.global_quantities.psi_boundary
-    psin_eq = (psi .- psia) ./ (psib - psia)
-    rzpi = Interpolations.linear_interpolation((r_eq, z_eq), psin_eq)
-    println(minimum(r_eq), ", ", maximum(r_eq))
-    println(minimum(z_eq), ", ", maximum(z_eq))
+    r_eq, z_eq, psin_eq, rzpi = prep_flux_map(dd; eq_time_idx, eq_profiles_2d_idx)
 
     # Get a row of cells. Since the mesh should be aligned to the flux surfaces,
     # it shouldn't matter which row is used, although the divertor rows might be
@@ -353,18 +377,610 @@ function mesh_psi_spacing(
     grid_ggd = dd.edge_profiles.grid_ggd[grid_ggd_idx]
     space = grid_ggd.space[space_idx]
     midplane_subset =
-        SOLPS2IMAS.get_grid_subset_with_index(grid_ggd, 11)
-    midplane_cell_centers = GGDUtils.get_subset_centers(space, midplane_subset)
+        get_grid_subset_with_index(grid_ggd, 11)
+    midplane_cell_centers = get_subset_centers(space, midplane_subset)
     r_mesh = [midplane_cell_centers[i][1] for i ∈ eachindex(midplane_cell_centers)]
     z_mesh = [midplane_cell_centers[i][2] for i ∈ eachindex(midplane_cell_centers)]
-    println(minimum(r_mesh), ", ", maximum(r_mesh))
-    println(minimum(z_mesh), ", ", maximum(z_mesh))
     psin_mesh = rzpi.(r_mesh, z_mesh)
     # This should come out sorted, but with GGD, who knows.
     ii = sortperm(psin_mesh)
     psin = psin_mesh[ii]
-    dpsin = psin[end] - psin[end-1]
+    if spacing_rule == "edge"
+        if avoid_guard_cell
+            dpsin = psin[end-1] - psin[end-2]
+        else
+            dpsin = psin[end] - psin[end-1]
+        end
+    else
+        if avoid_guard_cell
+            dpsin = diff(psin[2:end-1])
+        else
+            dpsin = diff(psin)
+        end
+        dpsin = sum(dpsin) / length(dpsin)
+    end
     return dpsin
+end
+
+"""
+    pick_extension_psi_range()
+
+Defines the psi_N levels for an extended mesh. The range of psi_N levels starts
+at the outer edge of the existing edge_profiles mesh at the midplane and goes
+out to the most distant (in flux space) point on the limiting surface.
+Returns a vector of psi_N levels.
+"""
+function pick_extension_psi_range(
+    dd::OMAS.dd;
+    eq_time_idx::Int64=1,
+    eq_profiles_2d_idx::Int64=1,
+    grid_ggd_idx::Int64=1,
+    space_idx::Int64=1,
+)
+    r_eq, z_eq, psin_eq, rzpi = prep_flux_map(dd; eq_time_idx, eq_profiles_2d_idx)
+
+    # Use wall to find maximum extent of contouring project
+    limiter = dd.wall.description_2d[1].limiter
+    wall_r = limiter.unit[1].outline.r
+    wall_z = limiter.unit[1].outline.z
+    wall_psin = rzpi.(wall_r, wall_z)
+
+    # Use ggd mesh to find inner limit of contouring project
+    grid_ggd = dd.edge_profiles.grid_ggd[grid_ggd_idx]
+    space = grid_ggd.space[space_idx]
+    midplane_subset = get_grid_subset_with_index(grid_ggd, 11)
+    midplane_cell_centers = get_subset_centers(space, midplane_subset)
+    psin_midplane = rzpi.(midplane_cell_centers[end][1], midplane_cell_centers[end][2])
+
+    # Choose contour levels
+    # The psi spacing function doesn't do much that's unique anymore.
+    # Should it be absorbed into this function intead?
+    dpsin = mesh_psi_spacing(
+        dd;
+        eq_time_idx=eq_time_idx,
+        eq_profiles_2d_idx=eq_profiles_2d_idx,
+        grid_ggd_idx=grid_ggd_idx,
+        space_idx=space_idx,
+        avoid_guard_cell=true,
+        spacing_rule="mean",
+    )
+    lvlstart = maximum(psin_midplane * sign(dpsin)) / sign(dpsin) + dpsin
+    lvlend = maximum(wall_psin * sign(dpsin)) / sign(dpsin) + dpsin
+    nlvl = Int64(ceil((lvlend - lvlstart) / dpsin))
+    psin_levels = collect(LinRange(lvlstart, lvlend, nlvl))
+    # eqt = dd.equilibrium.time_slice[eq_time_idx]
+    # if hasproperty(eqt.boundary_secondary_separatrix, :psi)
+    #     secondary_psi = eqt.boundary_secondary_separatrix.psi
+    #     secondary_psin = (secondary_psi - psia) / (psib - psia)
+    # else
+    #     secondary_psin = lvlend + dpsin
+    # end
+    return psin_levels
+end
+
+"""
+    pick_mesh_ext_starting_points(dd; grid_ggd_idx, space_idx)
+
+Picks starting points for the radial lines of the mesh extension. The strategy
+is to start from the outer edge of the existing mesh and follow the steepest
+gradient (of psi_N) to extend these gridlines outward.
+dd: a data dictionary instance with edge_profiles ggd and equilibrium loaded
+grid_ggd_idx: index within ggd
+space_idx: space number / index of the space to work with within edge_profiles
+Returns a tuple with vectors of R and Z starting points.
+"""
+function pick_mesh_ext_starting_points(grid_ggd, space)
+    # Choose starting points for the orthogonal (to the contour) gridlines
+    # Use the existing cells of the standard mesh
+    all_cell_subset = get_grid_subset_with_index(grid_ggd, 5)
+    all_border_edges = get_subset_boundary(space, all_cell_subset)
+    core_edges = get_grid_subset_with_index(grid_ggd, 15)
+    outer_target = get_grid_subset_with_index(grid_ggd, 13)
+    inner_target = get_grid_subset_with_index(grid_ggd, 14)
+    ci = [ele.object[1].index for ele ∈ core_edges.element]
+    oi = [ele.object[1].index for ele ∈ outer_target.element]
+    ii = [ele.object[1].index for ele ∈ inner_target.element]
+    border_edges = []
+    for i ∈ eachindex(all_border_edges)
+        bi = all_border_edges[i].object[1].index
+        if !(bi in oi) & !(bi in ii) & !(bi in ci)
+            border_edges = [border_edges; all_border_edges[i]]
+        end
+    end
+
+    npol = length(border_edges)
+    r = zeros(npol)
+    z = zeros(npol)
+    corner_idx = 1
+    for i ∈ 1:npol
+        edge_idx = border_edges[i].object[1].index
+        node_idx = space.objects_per_dimension[2].object[edge_idx].nodes[corner_idx]
+        geo = space.objects_per_dimension[1].object[node_idx].geometry
+        r[i, 1] = geo[1]
+        z[i, 1] = geo[2]
+    end
+    return r, z
+end
+
+#!format off
+"""
+    mesh_ext_follow_grad()
+
+Follows the steepest gradient from a set of starting points, dropping nodes at
+approximately regular intervals in psi_N. Due to the numerical techniques used, the
+node spacing may be imperfect (especially prone to error in regions where curvature
+of psi_N is large compared to its gradient).
+r_eq: Equilibrium reconstruction's grid, R coordinates
+z_eq: Equilibrium reconstruction's grid, Z coordinates
+psin_eq: Normalized poloidal flux in the equilibrium reconstruction as a function of R and Z
+rstart: R coordinates of starting points for the gradient following.
+zstart: Z coordinates of starting points
+nlvl: number of nodes to drop while following the gradient
+dpsin: node spacing in delta psi_N
+rzpi: linear interpolation of psin_eq() as a function of r_eq and z_eq
+    This was probably already computed and I think time would be saved by reusing it.
+    If you don't already have it, you can pass in nothing and let this function calculate it.
+
+Returns two matrices with R and Z coordinates of the mesh extension
+"""
+#!format on
+function mesh_ext_follow_grad(
+    r_eq::Vector{Float64},
+    z_eq::Vector{Float64},
+    psin_eq::Matrix,
+    rstart::Vector{Float64},
+    zstart::Vector{Float64},
+    nlvl::Int64,
+    dpsin::Float64,
+    rzpi=nothing,
+)
+    npol = length(rstart)
+    mesh_r = zeros((npol, nlvl))
+    mesh_z = zeros((npol, nlvl))
+    for i ∈ 1:npol
+        mesh_r[i, 1] = rstart[i]
+        mesh_z[i, 1] = zstart[i]
+    end
+
+    if rzpi === nothing
+        rzpi = Interpolations.LinearInterpolation((r_eq, z_eq), psin_eq)
+    end
+
+    # Step along the paths of steepest descent to populate the mesh.
+    dpsindr, dpsindz = OMAS.gradient(r_eq, z_eq, psin_eq)
+    dpdr = Interpolations.linear_interpolation((r_eq, z_eq), dpsindr)
+    dpdz = Interpolations.linear_interpolation((r_eq, z_eq), dpsindz)
+    rlim = (minimum(r_eq), maximum(r_eq))
+    zlim = (minimum(z_eq), maximum(z_eq))
+    pfr = rzpi.(mesh_r[:, 1], mesh_z[:, 1]) .< 1
+    for i ∈ 1:npol
+        if (mesh_r[i, 1] > rlim[1]) & (mesh_r[i, 1] < rlim[2]) &
+           (mesh_z[i, 1] > zlim[1]) & (mesh_z[i, 1] < zlim[2])
+            # direction = rzpi(mesh_r[i, 1], mesh_z[i, 1]) >= 1 ? 1 : -1
+            direction = pfr[i] ? -1 : 1
+            for j ∈ 2:nlvl
+                # This is low resolution linear shooting that could go wrong
+                mesh_r[i, j] = mesh_r[i, j-1]
+                mesh_z[i, j] = mesh_z[i, j-1]
+                upscale = 5  # Should improve gradient following in regions of low gradient (near X-point)
+                for k ∈ 1:upscale
+                    if (mesh_r[i, j] > rlim[1]) & (mesh_r[i, j] < rlim[2]) &
+                       (mesh_z[i, j] > zlim[1]) & (mesh_z[i, j] < zlim[2])
+                        dpr = dpdr(mesh_r[i, j], mesh_z[i, j])
+                        dpz = dpdz(mesh_r[i, j], mesh_z[i, j])
+                        d = dpsin * direction / upscale / (dpr .^ 2 + dpz .^ 2)
+                        mesh_r[i, j] += d * dpr
+                        mesh_z[i, j] += d * dpz
+                    end
+                end
+            end
+        end
+        # println("i=",i,"; r=",mesh_r[i, 1],":", mesh_r[i, end],",z=",mesh_z[i, 1], ":", mesh_z[i, end])
+    end
+    return mesh_r, mesh_z
+end
+
+"""
+    modify_mesh_ext_near_x!
+
+Modifies an extended mesh near a secondary X-point to compensate for the
+tendency of the mesh to go nuts near the X-point.
+eqt: equilibrium.time_slice information
+mesh_r: matrix of R values for the extended mesh
+mesh_z: matrix of Z values for the extended mesh
+"""
+function modify_mesh_ext_near_x!(
+    eqt::OMAS.equilibrium__time_slice,
+    mesh_r::Matrix{Float64},
+    mesh_z::Matrix{Float64},
+)
+    # There's a special path; the one that probably should've gone through the
+    # secondary X-point (if there is one). Any numerical error will make this
+    # path miss the X-point and go off to somewhere crazy instead, so instead of
+    # that, let's draw a straight line from the edge of the SOLPS mesh to the
+    # X-point.
+    npol, nlvl = size(mesh_r)
+    bssx = eqt.boundary_secondary_separatrix.x_point
+    nsx = length(bssx)
+    println("there are ", nsx, " secondary x points")
+    if nsx > 0
+        # There is hopefully only one X point on the secondary separatrix, but
+        # just in case some joker made a secondary snowflake or something crazy,
+        # we should pick which one we like best.
+        if nsx == 1
+            xidx = 1  # Easy peasy
+        else
+            score = zeros(nsx)
+            rsx = [bssx[i].r for i ∈ 1:nsx]
+            zsx = [bssx[i].z for i ∈ 1:nsx]
+            # Being close to the vertically flipped position of the primary X-pt
+            # seems nice; let's reward that
+            bsx = eqt.boundary_separatrix.x_point
+            npx = length(bsx)
+            rpx = [bsx[i].r for i ∈ 1:npx]
+            zpx = [bsx[i].z for i ∈ 1:npx]
+            # Well, if we have a primary snowflake, there could be multiple
+            # primary X-points, so now we have to pick our favorite primary.
+            # Being close to the boundary is a good sign
+            min_ds2 = ones(npx) * 1e6
+            for j ∈ 1:nsx
+                dr = [mesh_r[i, 1] - rpx[j] for i ∈ 1:npol]
+                dz = [mesh_z[i, 1] - zpx[j] for i ∈ 1:npol]
+                ds2 = dr .^ 2 .+ dz .^ 2
+                min_ds2[j] = minimum(ds2)
+            end
+            primary_idx = argmin(min_ds2)
+            rpx = rpx[primary_idx]
+            zpx = zpx[primary_idx]
+            # There can be only one
+
+            # Distance between secondary X-points and vert flip of favorite primary
+            ds2xx = (rsx .- rpx) .^ 2 .+ (zsx .- (-zpx)) .^ 2
+            score += ds2xx * 5
+
+            # Being close to the boundary is good
+            min_ds2xb = ones(nsx) * 1e6
+            for j ∈ 1:nsx
+                dr = [mesh_r[i, 1] - rsx[j] for i ∈ 1:npol]
+                dz = [mesh_z[i, 1] - zsx[j] for i ∈ 1:npol]
+                ds2 = dr .^ 2 .+ dz .^ 2
+                min_ds2xb[j] = minimum(ds2)
+            end
+            score += min_ds2xb
+            # And the winner is the one with the lowest score
+            xidx = argmin(score)
+        end
+        # Pick which edges are closest to the X-point
+        rx = bssx[xidx].r
+        zx = bssx[xidx].z
+        ds2 = (mesh_r[:, 1] .- rx) .^ 2 .+ (mesh_z[:, 1] .- zx) .^ 2
+        closest = argmin(ds2)
+        # Work out the mesh spacing
+        drm = mesh_r[closest, 2] - mesh_r[closest, 1]
+        dzm = mesh_z[closest, 2] - mesh_z[closest, 1]
+        dm = sqrt(drm^2 + dzm^2)
+        # Pick the angle
+        dr = rx - mesh_r[closest, 1]
+        dz = zx - mesh_z[closest, 1]
+        angle = atan(dz, dr)
+        # Replace the points
+        for i ∈ 2:nlvl
+            mesh_r[closest, i] = mesh_r[closest, 1] + dm * (i - 1) * cos(angle)
+            mesh_z[closest, i] = mesh_z[closest, 1] + dm * (i - 1) * sin(angle)
+        end
+    end
+end
+
+#!format off
+"""
+    record_regular_mesh!()
+
+Records arrays of mesh data from regular 2D arrays into the DD
+grid_ggd: grid_ggd within edge_profiles
+space: space in edge_profiles
+mesh_r: Matrix of R values along a mesh. Should be 2D. The two dimensions are in
+        the radial and poloidal directions.
+mesh_z: Z values to go with mesh_r.
+cut: Poloidal index of a cut between two groups of disconnected cells. Poloidal
+     connections (faces, cells) will not be added between this poloidal index
+     and the next index.
+"""
+#!format on
+function record_regular_mesh!(
+    grid_ggd,
+    space,
+    mesh_r::Matrix{Float64},
+    mesh_z::Matrix{Float64},
+    cut::Int64,
+)
+    npol, nlvl = size(mesh_r)
+    o0 = space.objects_per_dimension[1]  # Nodes
+    o1 = space.objects_per_dimension[2]  # Edges
+    o2 = space.objects_per_dimension[3]  # Cells (2D projection)
+    node_dim = 1
+    edge_dim = 2
+    cell_dim = 3
+
+    n_old_node = length(o0.object)
+    n_new_node = nlvl * npol
+    n_nodes = n_old_node + n_new_node
+
+    n_old_edge = length(o1.object)
+    n_new_edge_i = nlvl * (npol - 2)
+    n_new_edge_j = (nlvl - 1) * npol
+    n_new_edge = n_new_edge_i + n_new_edge_j
+    n_edges = n_old_edge + n_new_edge
+
+    n_old_cell = length(o2.object)
+    n_new_cell = (nlvl - 1) * (npol - 2)  # -2 to account for disconnect @ pfr
+    n_cells = n_old_cell + n_new_cell
+
+    # Define starting points and increments
+    node_start = n_old_node + 1
+    edge_start1 = n_old_edge + 1
+    edge_start2 = edge_start1 + n_new_edge_i
+    cell_start = n_old_cell + 1
+
+    n_per_i = nlvl
+    n_per_j = 1
+    e1_per_i = nlvl  # Edges along the npol direction / i direction
+    e2_per_i = nlvl - 1  # Edges along the nlvl direction / j direction
+    c_per_i = nlvl - 1  # # of cells < # of nodes
+
+    # Get new subsets ready
+    n_existing_subsets = length(grid_ggd.grid_subset)
+    new_subset_indices = [-1, -2, -3, -4, -5, -201, -202, -203, -204, -205]
+    n_new_subsets = length(new_subset_indices)
+    resize!(grid_ggd.grid_subset, n_existing_subsets + n_new_subsets)
+    for i ∈ 1:n_new_subsets
+        grid_ggd.grid_subset[n_existing_subsets+i].identifier.index =
+            new_subset_indices[i]
+    end
+    ext_nodes_sub = get_grid_subset_with_index(grid_ggd, -201)
+    ext_edges_sub = get_grid_subset_with_index(grid_ggd, -202)
+    ext_xedges_sub = get_grid_subset_with_index(grid_ggd, -203)
+    ext_yedges_sub = get_grid_subset_with_index(grid_ggd, -204)
+    ext_cells_sub = get_grid_subset_with_index(grid_ggd, -205)
+
+    # Preserve record of standard (non extended) mesh
+    for i ∈ 1:5
+        std_sub = get_grid_subset_with_index(grid_ggd, -i)
+        orig_sub = get_grid_subset_with_index(grid_ggd, i)
+        resize!(std_sub.element, length(orig_sub.element))
+        for j ∈ 1:length(orig_sub.element)
+            std_sub.element[j] = deepcopy(orig_sub.element[j])
+        end
+        std_sub.identifier.index = -i
+        std_sub.dimension = deepcopy(orig_sub.dimension)
+        std_sub.metric = deepcopy(orig_sub.metric)
+    end
+    all_nodes_sub = get_grid_subset_with_index(grid_ggd, 1)
+    all_edges_sub = get_grid_subset_with_index(grid_ggd, 2)
+    all_xedges_sub = get_grid_subset_with_index(grid_ggd, 3)
+    all_yedges_sub = get_grid_subset_with_index(grid_ggd, 4)
+    all_cells_sub = get_grid_subset_with_index(grid_ggd, 5)
+
+    nodes = resize!(o0.object, n_nodes)
+    edges = resize!(o1.object, n_edges)
+    cells = resize!(o2.object, n_cells)
+    space_idx = space.identifier.index
+    for i ∈ 1:npol
+        pastpc = i > cut
+        for j ∈ 1:nlvl
+            # Modified counters
+            ii = i - 1  # Offset due to indexing from 1
+            jj = j - 1  # Offset due to indexing from 1
+            iii = ii - 1 - pastpc  # # of connections < than # of nodes, missing row @ PFR transition
+            jjj = jj - 1  # # of connections < # of nodes
+
+            # Nodes
+            node_idx = node_start + ii * n_per_i + jj
+            nodes[node_idx].geometry = [mesh_r[i, j], mesh_z[i, j]]
+            add_subset_element!(ext_nodes_sub, space_idx, node_dim, node_idx)
+            add_subset_element!(all_nodes_sub, space_idx, node_dim, node_idx)
+
+            # Edges
+            if (i > 1) & (i != cut)  # i-1 to i  in the npol direction
+                edge_idx1 = edge_start1 + iii * e1_per_i + jj
+                edges[edge_idx1].nodes = [node_idx, node_idx - n_per_i]
+                resize!(edges[edge_idx1].boundary, 2)
+                edges[edge_idx1].boundary[1].index = node_idx
+                edges[edge_idx1].boundary[2].index = node_idx - n_per_i
+                add_subset_element!(ext_edges_sub, space_idx, edge_dim, edge_idx1)
+                add_subset_element!(ext_xedges_sub, space_idx, edge_dim, edge_idx1)
+                add_subset_element!(all_edges_sub, space_idx, edge_dim, edge_idx1)
+                add_subset_element!(all_xedges_sub, space_idx, edge_dim, edge_idx1)
+            end
+            if (j > 1)  # j-1 to j in the nlvl direction
+                edge_idx2 = edge_start2 + ii * e2_per_i + jjj
+                edges[edge_idx2].nodes = [node_idx, node_idx - n_per_j]
+                resize!(edges[edge_idx2].boundary, 2)
+                edges[edge_idx2].boundary[1].index = node_idx
+                edges[edge_idx2].boundary[2].index = node_idx - n_per_j
+                add_subset_element!(ext_edges_sub, space_idx, edge_dim, edge_idx2)
+                add_subset_element!(ext_yedges_sub, space_idx, edge_dim, edge_idx2)
+                add_subset_element!(all_edges_sub, space_idx, edge_dim, edge_idx2)
+                add_subset_element!(all_yedges_sub, space_idx, edge_dim, edge_idx2)
+            end
+
+            # Cells
+            if (i > 1) & (i != cut) & (j > 1)
+                cell_idx = cell_start + iii * c_per_i + jjj
+                cells[cell_idx].nodes = [
+                    node_idx,
+                    node_idx - n_per_i,
+                    node_idx - n_per_i - n_per_j,
+                    node_idx - n_per_j,
+                ]
+                resize!(cells[cell_idx].boundary, 4)
+                cells[cell_idx].boundary[1].index = edge_idx1
+                cells[cell_idx].boundary[2].index = edge_idx2
+                cells[cell_idx].boundary[3].index = edge_idx1 - 1
+                cells[cell_idx].boundary[4].index = edge_idx2 - e2_per_i
+
+                add_subset_element!(ext_cells_sub, space_idx, cell_dim, cell_idx)
+                add_subset_element!(all_cells_sub, space_idx, cell_dim, cell_idx)
+            end
+        end
+    end
+end
+
+"""
+    convert_filename(filename::String)
+
+Converts a filename into a string that doesn't have illegal characters.
+The main application is removing the path separator from source files with full
+paths so the full paths* can be part of the new filename. This way, the input
+files used to form some data can be part of the cache name, allowing quick lookup:
+the cache filename is defined by the input files, and if it doesn't exist, it
+needs to be generated.
+"""
+function convert_filename(filename::String)
+    filename_mod = replace(filename, "/" => "__")  # Illegal on *nix bc it's the path separator
+    filename_mod = replace(filename_mod, ":" => "--")  # Illegal on mac and windows
+    filename_mod = replace(filename_mod, "\\" => "__")  # Illegal on windows
+    filename_mod = replace(filename_mod, "\"" => "''")  # Illegal on windows
+    filename_mod = replace(filename_mod, "<" => "_lt_")  # Illegal on windows
+    filename_mod = replace(filename_mod, ">" => "_gt_")  # Illegal on windows
+    filename_mod = replace(filename_mod, "|" => "_pipe_")  # Illegal on windows
+    filename_mod = replace(filename_mod, "?" => "_q_")  # Illegal on windows
+    filename_mod = replace(filename_mod, "*" => "_a_")  # Illegal on windows
+    return filename_mod
+end
+
+#!format off
+"""
+    cached_mesh_extension!()
+
+Adds an extended mesh to a data dictionary, possibly from a cached result.
+dd: The data dictionary. It will be modified in place.
+eqdsk_file: the name of the EQDSK file that was used to get equilibrium data in
+            the dd.
+b2fgmtry: the name of the SOLPS geometry file that was used to get GGD info in
+          edge_profiles in the dd.
+eq_time_idx: Index of the time slice in equilibrium
+eq_profiles_2d_idx: Index of the 2D profile set in equilibrium
+                    (there is usually only one)
+grid_ggd_idx: Index of the grid_ggd set in edge_profiles
+space_idx: Index of the space
+clear_cache: delete any existing cache file (for use in testing)
+"""
+#!format on
+function cached_mesh_extension!(
+    dd::OMAS.dd,
+    eqdsk_file::String,
+    b2fgmtry::String;
+    eq_time_idx::Int64=1,
+    eq_profiles_2d_idx::Int64=1,
+    grid_ggd_idx::Int64=1,
+    space_idx::Int64=1,
+    clear_cache=false,
+)
+    path = "$(@__DIR__)/../data/"
+    eqdsk_file_mod = convert_filename(eqdsk_file)
+    b2fgmtry_mod = convert_filename(eqdsk_file)
+    cached_ext_name = path * eqdsk_file_mod * "_" * b2fgmtry_mod * ".mesh_ext.json"
+    if clear_cache
+        rm(cached_ext_name; force=true)
+        return cached_ext_name
+    end
+    if isfile(cached_ext_name)
+        # md = YAML.load_file(cached_ext_name)
+        md = JSON.parsefile(cached_ext_name)
+        pfr_transition = md["pfr_transition"]
+        mesh_r = convert(Matrix{Float64}, mapreduce(permutedims, vcat, md["r"])')
+        mesh_z = convert(Matrix{Float64}, mapreduce(permutedims, vcat, md["z"])')
+        npol = md["npol"]
+        nlvl = md["nlvl"]
+        record_regular_mesh!(
+            dd.edge_profiles.grid_ggd[grid_ggd_idx],
+            dd.edge_profiles.grid_ggd[grid_ggd_idx].space[space_idx],
+            mesh_r,
+            mesh_z,
+            pfr_transition,
+        )
+    else
+        mesh_r, mesh_z, pfr_transition = mesh_extension_sol!(
+            dd;
+            eq_time_idx=eq_time_idx,
+            eq_profiles_2d_idx=eq_profiles_2d_idx,
+            grid_ggd_idx=grid_ggd_idx,
+            space_idx=space_idx,
+        )
+        npol, nlvl = size(mesh_r)
+        data = Dict()
+        data["pfr_transition"] = pfr_transition
+        data["npol"] = npol
+        data["nlvl"] = nlvl
+        data["r"] = mesh_r
+        data["z"] = mesh_z
+        # YAML.write_file(cached_ext_name, data)
+        open(cached_ext_name, "w") do f
+            return JSON.print(f, data)
+        end
+        # fr = open("mesh_r.dat", "w")
+        # fz = open("mesh_z.dat", "w")
+        # for i ∈ 1:npol
+        #     for j ∈ 1:nlvl
+        #         print(fr, mesh_r[i, j], " ")
+        #         print(fz, mesh_z[i, j], " ")
+        #     end
+        #     println(fr, "")
+        #     println(fz, "")
+        # end
+    end
+    return cached_ext_name
+end
+
+"""
+    function mesh_extension_sol()
+
+Extends the mesh out into the SOL
+"""
+function mesh_extension_sol!(
+    dd::OMAS.dd;
+    eq_time_idx::Int64=1,
+    eq_profiles_2d_idx::Int64=1,
+    grid_ggd_idx::Int64=1,
+    space_idx::Int64=1,
+)
+    grid_ggd = dd.edge_profiles.grid_ggd[grid_ggd_idx]
+    space = grid_ggd.space[space_idx]
+    eqt = dd.equilibrium.time_slice[eq_time_idx]
+
+    r_eq, z_eq, psin_eq, rzpi = prep_flux_map(dd; eq_time_idx, eq_profiles_2d_idx)
+    psin_levels = pick_extension_psi_range(
+        dd;
+        eq_time_idx,
+        eq_profiles_2d_idx,
+        grid_ggd_idx,
+        space_idx,
+    )
+    nlvl = length(psin_levels)
+    dpsin = psin_levels[2] - psin_levels[1]
+    grad_start_r, grad_start_z = pick_mesh_ext_starting_points(grid_ggd, space)
+    npol = length(grad_start_r)
+    mesh_r, mesh_z = mesh_ext_follow_grad(
+        r_eq,
+        z_eq,
+        psin_eq,
+        grad_start_r,
+        grad_start_z,
+        nlvl,
+        dpsin,
+        rzpi,
+    )
+    modify_mesh_ext_near_x!(eqt, mesh_r, mesh_z)
+
+    # Now we have all the nodes needed for the new mesh, but none are connected
+    # yet. They are, however, organized nicely in order, so it shouldn't be too
+    # hard. Any X-points in the domain should be aggressively ignored, so all the
+    # connections should be nice and simple.
+    # The PFR flag needs to be respected; pfr nodes don't connect to non-pfr nodes
+    pfr = rzpi.(mesh_r[:, 1], mesh_z[:, 1]) .< 1
+    pfr_transition = argmax(abs.(diff(pfr)))
+    record_regular_mesh!(grid_ggd, space, mesh_r, mesh_z, pfr_transition)
+    return mesh_r, mesh_z, pfr_transition
 end
 
 """
