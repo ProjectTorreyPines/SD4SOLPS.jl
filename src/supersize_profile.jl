@@ -673,6 +673,21 @@ function modify_mesh_ext_near_x!(
     end
 end
 
+"""
+    itentify_cutoff_cells()
+
+Finds cells in the extended mesh that are cut off by the wall. Some cells may
+intersect the wall and be divided, and some may be outside the wall completely.
+Returns two flags: One is "okay" for cells where the cell area matches the area
+of the intersection between the cell and the tokamak interior (to within
+some small tolerance), and "border" for cells where the area of intersection is
+less than this but more than 0.
+dd: the data dictionary
+r: the R coordinates of the mesh cells to check
+z: the Z coordinates of the mesh cells to check
+pfr_transition: the index of the mesh row that should not be connected because
+    it spans the transition from the PFR to the common flux region of the SOL.
+"""
 function identify_cutoff_cells(
     dd::OMAS.dd,
     r::Matrix{Float64},
@@ -907,6 +922,7 @@ function trim_ext_mesh_with_wall!(
     all_xedges_sub = get_grid_subset_with_index(grid_ggd, 3)
     all_yedges_sub = get_grid_subset_with_index(grid_ggd, 4)
     all_cells_sub = get_grid_subset_with_index(grid_ggd, 5)
+    all_yedge_indices = [element.object[1].index for element in all_yedges_sub.element]
 
     deleted_nodes = []
     deleted_edges = []
@@ -925,11 +941,12 @@ function trim_ext_mesh_with_wall!(
         if abs(inter_area - cell_area) > tolerance
             # print("cell ", i, " has problem: inter=", inter_area, ",cell=",cell_area)
             # Problem! This cell needs modification.
+            edges = o2.object[ext_cells_sub.element[i].object[1].index].boundary
+            edges = [edge.index for edge in edges]
+            yedges = [index for index in edges if index in all_yedge_indices]
             if inter_area == 0
                 # println(", inter area is 0")
                 # Easy: just delete this guy AND all his nodes
-                edges = o2.object[ext_cells_sub.element[i].object[1].index].boundary
-                edges = [edge.index for edge in edges]
                 deleted_edges = [deleted_edges; edges]
                 deleted_nodes = [deleted_nodes; nodes]
                 
@@ -952,7 +969,23 @@ function trim_ext_mesh_with_wall!(
                 # Create new cell
                 # Reference the new boundary and nodes
                 # p = LibGEOS.Point()
+
+                # -------- okay, maybe that would work, but wouldn't it be easier
+                # to find nodes that are out of bounds and move them along their
+                # edges until they are on the wall? Then some of the edges would
+                # be fixed and there would be no invalid nodes. A complicated wall
+                # shape might require more nodes and edges to be added.
                 inter = GeoInterface.coordinates(inter)[1]
+                for yedge in yedges
+                    print(yedge, ": ")
+                    yedge_nodes = o1.object[yedge].nodes
+                    print(yedge_nodes, ": ")
+                    edge_node_coords = [LibGEOS.Point(o0.object[yedge_nodes[1]].geometry[1], o0.object[yedge_nodes[1]].geometry[2]), LibGEOS.Point(o0.object[yedge_nodes[2]].geometry[1], o0.object[yedge_nodes[2]].geometry[2])]
+                    println(edge_node_coords)
+                    edge_line = LibGEOS.LineString([edge_node_coords])
+                    intersection_point = LibGEOS.intersection(wall_poly, edge_line)
+                    println(intersection_point)
+                end
             end
             
         end
