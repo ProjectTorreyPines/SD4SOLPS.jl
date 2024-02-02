@@ -8,8 +8,10 @@ using Interpolations: Interpolations
 using GGDUtils:
     GGDUtils, get_grid_subset_with_index, add_subset_element!, get_subset_boundary,
     project_prop_on_subset!, get_subset_centers
-using PolygonOps: PolygonOps
+using PolygonOps: PolygonOps, inpolygon
 using JSON: JSON
+using LibGEOS: LibGEOS, readgeom, intersection
+using GeoInterface: GeoInterface
 
 export extrapolate_core
 export fill_in_extrapolated_core_profile
@@ -671,6 +673,70 @@ function modify_mesh_ext_near_x!(
     end
 end
 
+"""
+    itentify_cutoff_cells()
+
+Finds cells in the extended mesh that are cut off by the wall. Some cells may
+intersect the wall and be divided, and some may be outside the wall completely.
+Returns two flags: One is "okay" for cells where the cell area matches the area
+of the intersection between the cell and the tokamak interior (to within
+some small tolerance), and "border" for cells where the area of intersection is
+less than this but more than 0.
+dd: the data dictionary
+r: the R coordinates of the mesh cells to check
+z: the Z coordinates of the mesh cells to check
+pfr_transition: the index of the mesh row that should not be connected because
+    it spans the transition from the PFR to the common flux region of the SOL.
+"""
+function identify_cutoff_cells(
+    dd::OMAS.dd,
+    r::Matrix{Float64},
+    z::Matrix{Float64},
+    pfr_transition::Int64,
+)
+    npol, nlvl = size(r)
+    okay = zeros(Bool, (npol - 1, nlvl - 1))
+    border = zeros(Bool, (npol - 1, nlvl - 1))
+    limiter = dd.wall.description_2d[1].limiter
+    wall_r = limiter.unit[1].outline.r
+    wall_z = limiter.unit[1].outline.z
+    poly = [[wall_r[i], wall_z[i]] for i ∈ 1:length(wall_r)]
+    poly = append!(poly, [[wall_r[1], wall_z[1]]])
+    wall_poly = LibGEOS.Polygon([poly])
+    # inpoly = [[inpolygon([r[i, j], z[i, j]], poly) for j ∈ 1:nlvl] for i ∈ 1:npol]
+    # wl = Matrix(reduce(hcat, inpoly)') .!= 0
+    tolerance = 1e-7  # m^2
+
+    for i ∈ 2:npol
+        if (i - 1) != pfr_transition
+            for j ∈ 2:nlvl
+                cell_r = [r[i, j], r[i, j-1], r[i-1, j-1], r[i-1, j], r[i, j]]
+                cell_z = [z[i, j], z[i, j-1], z[i-1, j-1], z[i-1, j], z[i, j]]
+                cell = LibGEOS.Polygon([[[cell_r[k], cell_z[k]] for k in 1:length(cell_r)]])
+                # within = [wl[i, j], wl[i-1, j], wl[i-1, j-1], wl[i, j-1]]
+                # okay[i-1, j-1] = all(within)
+                # border[i-1, j-1] = (minimum(within) == 0) & (maximum(within) == 1)
+                cell_area = LibGEOS.area(cell)
+                inter = LibGEOS.intersection(wall_poly, cell)
+                inter_area = LibGEOS.area(inter)
+                okay[i-1, j-1] = abs(inter_area - cell_area) < tolerance
+                border[i-1, j-1] = 0 < inter_area < (cell_area - tolerance)
+                # println("i=",i,",j=",j,"okay=",okay[i-1,j-1],",ca=",cell_area,",ia=",inter_area)
+
+                # inter = GeoInterface.coordinates(inter)[1]
+
+            end
+        end
+    end
+    # println("area of wall polygon:", LibGEOS.area(wall_poly))
+
+    # fz = open("limiter.dat", "w")
+    # for i ∈ 1:length(wall_r)
+    #     println(fz, wall_r[i], " ", wall_z[i])
+    # end
+    return okay, border
+end
+
 #!format off
 """
     record_regular_mesh!()
@@ -780,7 +846,7 @@ function record_regular_mesh!(
             add_subset_element!(all_nodes_sub, space_idx, node_dim, node_idx)
 
             # Edges
-            if (i > 1) & (i != cut)  # i-1 to i  in the npol direction
+            if (i > 1) & (i != (cut+1))  # i-1 to i  in the npol direction
                 edge_idx1 = edge_start1 + iii * e1_per_i + jj
                 edges[edge_idx1].nodes = [node_idx, node_idx - n_per_i]
                 resize!(edges[edge_idx1].boundary, 2)
@@ -804,7 +870,7 @@ function record_regular_mesh!(
             end
 
             # Cells
-            if (i > 1) & (i != cut) & (j > 1)
+            if (i > 1) & (i != (cut+1)) & (j > 1)
                 cell_idx = cell_start + iii * c_per_i + jjj
                 cells[cell_idx].nodes = [
                     node_idx,
@@ -823,6 +889,184 @@ function record_regular_mesh!(
             end
         end
     end
+end
+
+function trim_ext_mesh_with_wall!(
+    dd::OMAS.dd;
+    grid_ggd_idx::Int64=1,
+    space_idx::Int64=1,
+)
+    limiter = dd.wall.description_2d[1].limiter
+    wall_r = limiter.unit[1].outline.r
+    wall_z = limiter.unit[1].outline.z
+    poly = [[wall_r[i], wall_z[i]] for i ∈ 1:length(wall_r)]
+    poly = append!(poly, [[wall_r[1], wall_z[1]]])
+    wall_poly = LibGEOS.Polygon([poly])
+    tolerance = 1e-7  # m^2
+
+    grid_ggd = dd.edge_profiles.grid_ggd[grid_ggd_idx]
+    space = grid_ggd.space[space_idx]
+
+    o0 = space.objects_per_dimension[1]  # Nodes
+    o1 = space.objects_per_dimension[2]  # Edges
+    o2 = space.objects_per_dimension[3]  # Cells (2D projection)
+
+    ext_nodes_sub = get_grid_subset_with_index(grid_ggd, -201)
+    ext_edges_sub = get_grid_subset_with_index(grid_ggd, -202)
+    ext_xedges_sub = get_grid_subset_with_index(grid_ggd, -203)
+    ext_yedges_sub = get_grid_subset_with_index(grid_ggd, -204)
+    ext_cells_sub = get_grid_subset_with_index(grid_ggd, -205)
+
+    all_nodes_sub = get_grid_subset_with_index(grid_ggd, 1)
+    all_edges_sub = get_grid_subset_with_index(grid_ggd, 2)
+    all_xedges_sub = get_grid_subset_with_index(grid_ggd, 3)
+    all_yedges_sub = get_grid_subset_with_index(grid_ggd, 4)
+    all_cells_sub = get_grid_subset_with_index(grid_ggd, 5)
+    all_yedge_indices = [element.object[1].index for element in all_yedges_sub.element]
+
+    deleted_nodes = []
+    deleted_edges = []
+    deleted_cells = []
+    ext_cells = length(ext_cells_sub.element)
+    for j ∈ 1:ext_cells
+        i = ext_cells - (j-1)
+        cell_idx = ext_cells_sub.element[i].object[1].index
+        nodes = o2.object[cell_idx].nodes
+        c = [[o0.object[n].geometry[1], o0.object[n].geometry[2]] for n in nodes]
+        c = [c; [c[1]]]
+        cell = LibGEOS.Polygon([c])
+        cell_area = LibGEOS.area(cell)
+        inter = LibGEOS.intersection(wall_poly, cell)
+        inter_area = LibGEOS.area(inter)
+        if abs(inter_area - cell_area) > tolerance
+            # print("cell ", i, " has problem: inter=", inter_area, ",cell=",cell_area)
+            # Problem! This cell needs modification.
+            edges = o2.object[ext_cells_sub.element[i].object[1].index].boundary
+            edges = [edge.index for edge in edges]
+            yedges = [index for index in edges if index in all_yedge_indices]
+            if inter_area == 0
+                # println(", inter area is 0")
+                # Easy: just delete this guy AND all his nodes
+                deleted_edges = [deleted_edges; edges]
+                deleted_nodes = [deleted_nodes; nodes]
+                
+                deleteat!(ext_cells_sub.element, i)
+                # deleteat!(o2.object, cell_idx)
+                deleted_cells = [deleted_cells; i]
+            else
+                # println("cell area is not 0")
+                # Hard: cell is partly in bounds
+                # Find which nodes are out of bounds
+                # Find which edges are out of bounds or intersecting
+                # Delete all nodes and edges that aren't entirely in bounds
+                # Delete the cell
+                # Determine whether new nodes were already added by a previous cell
+                #   The last npol + 1 cells need to be considered based on the order
+                #   in which cells were added.
+                # Add new nodes that will be unique
+                # Determine whether new edges were already added by a previous cell
+                # Add new edges that will be unique
+                # Create new cell
+                # Reference the new boundary and nodes
+                # p = LibGEOS.Point()
+
+                # -------- okay, maybe that would work, but wouldn't it be easier
+                # to find nodes that are out of bounds and move them along their
+                # edges until they are on the wall? Then some of the edges would
+                # be fixed and there would be no invalid nodes. A complicated wall
+                # shape might require more nodes and edges to be added.
+                inter = GeoInterface.coordinates(inter)[1]
+                for yedge in yedges
+                    print(yedge, ": ")
+                    yedge_nodes = o1.object[yedge].nodes
+                    print(yedge_nodes, ": ")
+                    edge_node_coords = [LibGEOS.Point(o0.object[yedge_nodes[1]].geometry[1], o0.object[yedge_nodes[1]].geometry[2]), LibGEOS.Point(o0.object[yedge_nodes[2]].geometry[1], o0.object[yedge_nodes[2]].geometry[2])]
+                    println(edge_node_coords)
+                    edge_line = LibGEOS.LineString([edge_node_coords])
+                    intersection_point = LibGEOS.intersection(wall_poly, edge_line)
+                    println(intersection_point)
+                end
+            end
+            
+        end
+    end
+    println("# deleted edges = ", length(deleted_edges))
+    sub_edges = [ele.object[1].index for ele in ext_edges_sub.element]
+    sub_xedges = [ele.object[1].index for ele in ext_xedges_sub.element]
+    sub_yedges = [ele.object[1].index for ele in ext_yedges_sub.element]
+    asub_edges = [ele.object[1].index for ele in all_edges_sub.element]
+    asub_xedges = [ele.object[1].index for ele in all_xedges_sub.element]
+    asub_yedges = [ele.object[1].index for ele in all_yedges_sub.element]
+    unique!(sort!(deleted_nodes, rev=true))
+    unique!(sort!(deleted_edges, rev=true))
+    nae = length(asub_edges)
+    for j in 1:nae
+        i = nae - (j-1)
+        if i <= length(sub_edges)
+            if sub_edges[i] in deleted_edges
+                deleteat!(ext_edges_sub.element, i)
+            end
+        end
+        if i <= length(sub_xedges)
+            if sub_xedges[i] in deleted_edges
+                deleteat!(ext_xedges_sub.element, i)
+            end
+        end
+        if i <= length(sub_yedges)
+            if sub_yedges[i] in deleted_edges
+                deleteat!(ext_yedges_sub.element, i)
+            end
+        end
+        if asub_edges[i] in deleted_edges
+            deleteat!(all_edges_sub.element, i)
+        end
+        if i <= length(asub_xedges)
+            if asub_xedges[i] in deleted_edges
+                deleteat!(all_xedges_sub.element, i)
+            end
+        end
+        if i <= length(asub_yedges)
+            if asub_yedges[i] in deleted_edges
+                deleteat!(all_yedges_sub.element, i)
+            end
+        end
+    end
+    sub_nodes = [ele.object[1].index for ele in ext_nodes_sub.element]
+    asub_nodes = [ele.object[1].index for ele in all_nodes_sub.element]
+    an = length(asub_nodes)
+    for j in 1:an
+        i = an - (j-1)
+        if asub_nodes[i] in deleted_nodes
+            deleteat!(all_nodes_sub.element, i)
+        end
+        if i <= length(sub_nodes)
+            if sub_nodes[i] in deleted_nodes
+                deleteat!(ext_nodes_sub.element, i)
+            end
+        end
+    end
+    asub_cells = [ele.object[1].index for ele in all_cells_sub.element]
+    nac = length(asub_cells)
+    for j in 1:nac
+        i = nac - (j - 1)
+        if asub_cells[i] in deleted_cells
+            deleteat!(all_cells_sub.element, i)
+        end
+    end
+    # println("area of wall polygon:", LibGEOS.area(wall_poly))
+    # println("length(o0.object)=",length(o0.object), ", maximum(deleted_nodes)=",maximum(deleted_nodes))
+    # for node in deleted_nodes
+    #     deleteat!(o0.object, node)
+    # end
+    for edge in deleted_edges
+        deleteat!(o1.object, edge)
+    end
+
+    fz = open("limiter.dat", "w")
+    for i ∈ 1:length(wall_r)
+        println(fz, wall_r[i], " ", wall_z[i])
+    end
+    return
 end
 
 """
@@ -979,7 +1223,19 @@ function mesh_extension_sol!(
     # The PFR flag needs to be respected; pfr nodes don't connect to non-pfr nodes
     pfr = rzpi.(mesh_r[:, 1], mesh_z[:, 1]) .< 1
     pfr_transition = argmax(abs.(diff(pfr)))
+    # okay, border = identify_cutoff_cells(dd,mesh_r,mesh_z,pfr_transition)
+    # fr = open("okay.dat", "w")
+    # fz = open("border.dat", "w")
+    # for i ∈ 1:(npol-1)
+    #     for j ∈ 1:(nlvl-1)
+    #         print(fr, okay[i, j], " ")
+    #         print(fz, border[i, j], " ")
+    #     end
+    #     println(fr, "")
+    #     println(fz, "")
+    # end
     record_regular_mesh!(grid_ggd, space, mesh_r, mesh_z, pfr_transition)
+    trim_ext_mesh_with_wall!(dd; grid_ggd_idx=grid_ggd_idx, space_idx=space_idx)
     return mesh_r, mesh_z, pfr_transition
 end
 
