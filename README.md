@@ -13,7 +13,15 @@ Steps:
 
 ## Installation
 
+### Cloning using ssh
+
+It is recommended to setup github access for your account using a ssh key. Please follow
+github intstructions for [connecting to github with ssh](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account).  The make file below and other steps uses ssh clone url and would
+fail unless you have access to github setup using ssh key. If you prefer to use password for login, correct clone urls accordingly.
+
 ### Using make file
+
+This option only works on and has been tested on macOS and unix. If you have windows, please use the [manual instructions](https://github.com/ProjectTorreyPines/SD4SOLPS.jl/wiki) instead.
 
 #### Option 1: Download the [example directory](https://github.com/ProjectTorreyPines/SD4SOLPS.jl/tree/master/example) in this repo:
 
