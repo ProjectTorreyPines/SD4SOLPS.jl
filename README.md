@@ -11,13 +11,34 @@ Steps:
 4) Run synthetic diagnostic models and record output
 
 
-## Installation
+## Building julia environment for SD4SOLPS
 
 ### Cloning using ssh
 
 It is recommended to setup github access for your account using a ssh key. Please follow
 github intstructions for [connecting to github with ssh](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account).  The make file below and other steps uses ssh clone url and would
 fail unless you have access to github setup using ssh key. If you prefer to use password for login, correct clone urls accordingly.
+
+After cloning this repo, check the make menu:
+```
+SD4SOLPS.jl % make help
+Help Menu
+
+make env_with_cloned_repo (or make r): Creates a Julia environment with the cloned repositories
+make env_with_git_url (or make u): Creates a Julia environment with the git urls without creating local clones
+make clean: Deletes Project.toml and Manifest.toml for a fresh start
+```
+
+### make r
+This option creates local copies of required private repositories at the same level as current repository and uses them in develop mode to create a Manifest.toml
+
+### make u
+This option uses url of required private repositories to create a static Manifest.toml attached to current master branches of these repositories.
+
+### make clean
+Deletes Manifest.toml so that environment can be recreated, to update or change the last used method.
+
+## Example environment with all repositories
 
 ### Using make file
 
