@@ -33,9 +33,9 @@ function find_files_in_allowed_folders(
     recursive=true,
     allow_reduced_versions=false,
 )
-    files = ["b2fgmtry", "b2time.nc", "b2mn.dat", "gridspacedesc.yml", eqdsk_file]
+    files = ["b2fgmtry", "b2time.nc", "b2mn.dat", eqdsk_file]
     reduced_files =
-        ["b2fgmtry_red", "b2time_red.nc", "b2mn.dat", "gridspacedesc.yml", eqdsk_file]
+        ["b2fgmtry_red", "b2time_red.nc", "b2mn.dat", eqdsk_file]
     output_files = fill("", length(files))
     if recursive
         dirs = []
@@ -262,16 +262,15 @@ function preparation(
     filename::String="sd_input_data",
     output_format::String="json",
 )
-    b2fgmtry, b2time, b2mn, gridspec, eqdsk =
+    b2fgmtry, b2time, b2mn, eqdsk =
         find_files_in_allowed_folders(dirs...; eqdsk_file=eqdsk_file)
     println("Found source files:")
     println("    b2fgmtry = ", b2fgmtry)
     println("    b2time = ", b2time)
     println("    b2mn.dat = ", b2mn)
-    println("    gridspec = ", gridspec)
     println("    eqdsk = ", eqdsk)
 
-    dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time, gridspec, b2mn)
+    dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time; b2mn=b2mn)
     geqdsk_to_imas!(eqdsk, dd)
     println("Loaded input data into IMAS DD")
 

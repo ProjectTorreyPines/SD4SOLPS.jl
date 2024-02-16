@@ -106,11 +106,11 @@ function define_default_sample_set()
         eqdsk_file="thereisntoneyet",
         allow_reduced_versions=false,
     )
-    b2fgmtry, b2time, b2mn, gridspec, eqdsk = file_list
+    b2fgmtry, b2time, b2mn, eqdsk = file_list
     eqdsk =
         splitdir(pathof(SD4SOLPS))[1] *
         "/../sample/ITER_Lore_2296_00000/EQDSK/g002296.00200"
-    return b2fgmtry, b2time, b2mn, gridspec, eqdsk
+    return b2fgmtry, b2time, b2mn, eqdsk
 end
 
 if args["lightweight_utilities"]
@@ -173,19 +173,17 @@ if args["core_profile_extension"]
 
         # The full workflow --------------------------------------
         # Setup sample DD
-        b2fgmtry, b2time, b2mn, gridspec, eqdsk = define_default_sample_set()
+        b2fgmtry, b2time, b2mn, eqdsk = define_default_sample_set()
         println(b2fgmtry)
         println(b2time)
         println(b2mn)
-        println(gridspec)
         println(eqdsk)
         # If these files don't exist, complete the DVC sample setup and try again
         @test isfile(b2fgmtry)
         @test isfile(b2time)
         @test isfile(b2mn)
-        @test isfile(gridspec)
         @test isfile(eqdsk)
-        dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time, gridspec, b2mn)
+        dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time; b2mn=b2mn)
         SD4SOLPS.geqdsk_to_imas!(eqdsk, dd)
         rho = dd.equilibrium.time_slice[1].profiles_1d.rho_tor_norm
 
@@ -220,8 +218,8 @@ end
 if args["edge_profile_extension"]
     @testset "edge_profile_extension" begin
         # Test for getting mesh spacing
-        b2fgmtry, b2time, b2mn, gridspec, eqdsk = define_default_sample_set()
-        dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time, gridspec, b2mn)
+        b2fgmtry, b2time, b2mn, eqdsk = define_default_sample_set()
+        dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time; b2mn=b2mn)
         SD4SOLPS.geqdsk_to_imas!(eqdsk, dd)
         dpsin = SD4SOLPS.mesh_psi_spacing(dd)
         @test dpsin > 0.0
@@ -280,16 +278,14 @@ if args["heavy_utilities"]
         file_list = SD4SOLPS.find_files_in_allowed_folders(
             sample_path; eqdsk_file="thereisntoneyet", allow_reduced_versions=true,
         )
-        @test length(file_list) == 5
-        b2fgmtry, b2time, b2mn, gridspec, eqdsk = file_list
+        @test length(file_list) == 4
+        b2fgmtry, b2time, b2mn, eqdsk = file_list
         @test length(b2fgmtry) > 10
         @test endswith(b2fgmtry, "b2fgmtry_red") | endswith(b2fgmtry, "b2fgmtry")
         @test length(b2time) > 10
         @test endswith(b2time, "b2time_red.nc") | endswith(b2time, "b2time.nc")
         @test length(b2mn) > 10
         @test endswith(b2mn, "b2mn.dat")
-        @test length(gridspec) > 10
-        @test endswith(gridspec, "gridspacedesc.yml")
 
         # Test for sweeping 1D core profiles into 2D R,Z
         # (or anyway evaluating them at any R,Z location)
