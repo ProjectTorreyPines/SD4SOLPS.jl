@@ -272,6 +272,8 @@ function preparation(
 
     dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time; b2mn=b2mn)
     geqdsk_to_imas!(eqdsk, dd)
+    # Repairs
+    add_rho_to_equilibrium!(dd)  # Doesn't do anything if rho is valid
     println("Loaded input data into IMAS DD")
 
     fill_in_extrapolated_core_profile!(dd, "electrons.density"; method=core_method)
