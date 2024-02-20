@@ -22,6 +22,17 @@ space = grid_ggd.space[1] # First space in this grid_ggd
 # Choose backend
 gr()           # Fast and can save pdf
 # plotlyjs()   # Use for interactive plot, can only save png
-n_e = GGDUtils.get_prop_with_grid_subset_index(dd.edge_profiles.ggd[1].electrons.density, 5)
-plot(dd.edge_profiles.grid_ggd, n_e, colorbar_title="Electrons density / m^(-3)")
-plot!(space, GGDUtils.get_grid_subset_with_index(grid_ggd, 16), linecolor=:black, linewidth=2, linestyle=:solid, label="Separatix", legend=true)
+n_e = GGDUtils.get_prop_with_grid_subset_index(
+    dd.edge_profiles.ggd[1].electrons.density,
+    5,
+)
+plot(dd.edge_profiles.grid_ggd, n_e; colorbar_title="Electrons density / m^(-3)")
+plot!(
+    space,
+    GGDUtils.get_grid_subset_with_index(grid_ggd, 16);
+    linecolor=:black,
+    linewidth=2,
+    linestyle=:solid,
+    label="Separatix",
+    legend=true,
+)

@@ -134,7 +134,7 @@ function fill_in_extrapolated_core_profile!(
     grid_ggd_idx::Int64=1,
     space_idx::Int64=1,
 )
-    check_rho_1d(dd, time_slice=eq_time_idx, throw_on_fail=true)
+    check_rho_1d(dd; time_slice=eq_time_idx, throw_on_fail=true)
     grid_ggd = dd.edge_profiles.grid_ggd[grid_ggd_idx]
     space = grid_ggd.space[space_idx]
     cell_subset =

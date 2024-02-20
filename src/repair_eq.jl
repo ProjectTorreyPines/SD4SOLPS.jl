@@ -40,8 +40,8 @@ function check_rho_1d(dd::OMAS.dd; time_slice::Int64=1, throw_on_fail::Bool=fals
                     " zeros in the source file. In this case, ", reason, ". You",
                     " can try using add_rho_to_equilibrium!() to calculate rho ",
                     "and add it.",
-                )
-            )
+                ),
+            ),
         )
     end
     return rho_okay
