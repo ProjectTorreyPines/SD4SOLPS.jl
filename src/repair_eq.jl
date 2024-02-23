@@ -17,7 +17,7 @@ export check_rho_1d
 
 Checks to see if rho exists and is valid in the equilibrium 1d profiles
 """
-function check_rho_1d(dd::OMAS.dd; time_slice::Int64=1)
+function check_rho_1d(dd::OMAS.dd; time_slice::Int64=1, throw_on_fail::Bool=false)
     rho = dd.equilibrium.time_slice[time_slice].profiles_1d.rho_tor_norm
     if length(rho) < 1
         rho_okay = false
@@ -25,6 +25,24 @@ function check_rho_1d(dd::OMAS.dd; time_slice::Int64=1)
         rho_okay = false
     else
         rho_okay = true
+    end
+    if (throw_on_fail) * (!rho_okay)
+        if length(rho) < 1
+            reason = "rho is missing"
+        else
+            reason = "rho is all zeros"
+        end
+        throw(
+            ArgumentError(
+                string(
+                    "Equilibrium rho profile data at time index ", time_slice,
+                    " is invalid. This is usually because rho is missing or all",
+                    " zeros in the source file. In this case, ", reason, ". You",
+                    " can try using add_rho_to_equilibrium!() to calculate rho ",
+                    "and add it.",
+                ),
+            ),
+        )
     end
     return rho_okay
 end
