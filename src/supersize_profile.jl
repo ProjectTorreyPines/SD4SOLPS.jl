@@ -878,7 +878,7 @@ function cached_mesh_extension!(
     clear_cache=false,
 )
     path = "$(@__DIR__)/../data/"
-    cached_ext_name = path * string(hash(eqdsk_file*b2fgmtry)) * ".mesh_ext.json"
+    cached_ext_name = path * string(hash(eqdsk_file * b2fgmtry)) * ".mesh_ext.json"
     if clear_cache
         rm(cached_ext_name; force=true)
         return cached_ext_name
