@@ -29,7 +29,7 @@ n_e = GGDUtils.get_prop_with_grid_subset_index(
 plot(dd.edge_profiles.grid_ggd, n_e; colorbar_title="Electrons density / m^(-3)")
 plot!(
     space,
-    GGDUtils.get_grid_subset_with_index(grid_ggd, 16);
+    GGDUtils.get_grid_subset(grid_ggd, 16);
     linecolor=:black,
     linewidth=2,
     linestyle=:solid,

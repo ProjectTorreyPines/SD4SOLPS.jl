@@ -7,7 +7,7 @@ using Test
 using Unitful: Unitful
 using Interpolations: Interpolations
 using ArgParse: ArgParse
-using GGDUtils: GGDUtils, get_grid_subset_with_index
+using GGDUtils: GGDUtils, get_grid_subset
 
 function parse_commandline()
     s = ArgParse.ArgParseSettings(; description="Run tests. Default is all tests.")
@@ -229,7 +229,7 @@ if args["edge_profile_extension"]
         grid_ggd = dd.edge_profiles.grid_ggd[grid_ggd_idx]
         extended_subs = 1:5
         orig_subs = [
-            deepcopy(get_grid_subset_with_index(grid_ggd, i)) for
+            deepcopy(get_grid_subset(grid_ggd, i)) for
             i ∈ extended_subs
         ]
         cfn = SD4SOLPS.cached_mesh_extension!(dd, eqdsk, b2fgmtry; clear_cache=true)
@@ -237,9 +237,9 @@ if args["edge_profile_extension"]
         SD4SOLPS.cached_mesh_extension!(dd, eqdsk, b2fgmtry; grid_ggd_idx=grid_ggd_idx)
         for j ∈ extended_subs
             orig_sub = orig_subs[j]
-            std_sub = get_grid_subset_with_index(grid_ggd, -j)
-            all_sub = get_grid_subset_with_index(grid_ggd, j)
-            ext_sub = get_grid_subset_with_index(grid_ggd, -200 - j)
+            std_sub = get_grid_subset(grid_ggd, -j)
+            all_sub = get_grid_subset(grid_ggd, j)
+            ext_sub = get_grid_subset(grid_ggd, -200 - j)
             orig_indices = [ele.object[1].index for ele ∈ orig_sub.element]
             std_indices = [ele.object[1].index for ele ∈ std_sub.element]
             all_indices = [ele.object[1].index for ele ∈ all_sub.element]
