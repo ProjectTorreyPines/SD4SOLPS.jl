@@ -1,6 +1,6 @@
 module SD4SOLPS
 
-using OMAS: OMAS
+using IMASDD: IMASDD
 using SOLPS2IMAS: SOLPS2IMAS
 using EFIT: EFIT
 using Interpolations: Interpolations
@@ -287,7 +287,7 @@ function preparation(
     println("Extrapolated edge profiles (but not really (placeholder only))")
 
     if output_format == "json"
-        OMAS.imas2json(dd, filename * ".json")
+        IMASDD.imas2json(dd, filename * ".json")
     else
         throw(ArgumentError(string("Unrecognized output format: ", output_format)))
     end

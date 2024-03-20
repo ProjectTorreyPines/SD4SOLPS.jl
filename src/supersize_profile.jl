@@ -3,7 +3,7 @@ Utilities for extrapolating profiles
 """
 
 # import CalculusWithJulia
-using OMAS: OMAS
+using IMASDD: IMASDD
 using Interpolations: Interpolations
 using GGDUtils:
     GGDUtils, get_grid_subset, add_subset_element!, get_subset_boundary,
@@ -55,7 +55,7 @@ Concept:
     integrate it to get the profile of the quantity in question
 """
 function extrapolate_core(edge_rho, edge_quantity, rho_output)
-    grad = OMAS.gradient(edge_rho, edge_quantity)
+    grad = IMASDD.gradient(edge_rho, edge_quantity)
     gf = grad[1]
     rf = edge_rho[1]
     gmid = -abs(gf) / 4.0
@@ -92,7 +92,7 @@ end
 #!format off
 """
     fill_in_extrapolated_core_profile!(
-    dd::OMAS.dd,
+    dd::IMASDD.dd,
     quantity_name::String;
     method::String="simple",
     eq_time_idx::Int64=1,
@@ -108,7 +108,7 @@ edge_profiles data to rho, calls the function that performs the extrapolation (w
 not a simple linear extrapolation but has some trickery to attempt to make a somewhat
 convincing profile shape), and writes the result to core_profiles. This involves a bunch
 of interpolations and stuff.
-dd: an IMAS/OMAS data dictionary
+dd: an IMAS data dictionary
 quantity_name: the name of a quantity in edge_profiles.profiles_2d and
                core_profiles.profiles_1d, such as "electrons.density"
 method: Extrapolation method.
@@ -130,7 +130,7 @@ cell_subset_idx: index of the subset of cells to use for the extrapolation. The 
 """
 #!format on
 function fill_in_extrapolated_core_profile!(
-    dd::OMAS.dd,
+    dd::IMASDD.dd,
     quantity_name::String;
     method::String="simple",
     eq_time_idx::Int64=1,
@@ -300,7 +300,7 @@ Returns:
   - normalized poloidal flux on the equilibrium grid
   - a linear interpolation of norm pol flux vs. R and Z, ready to be evaluated
 """
-function prep_flux_map(dd::OMAS.dd; eq_time_idx::Int64=1, eq_profiles_2d_idx::Int64=1)
+function prep_flux_map(dd::IMASDD.dd; eq_time_idx::Int64=1, eq_profiles_2d_idx::Int64=1)
     eqt = dd.equilibrium.time_slice[eq_time_idx]
     p2 = eqt.profiles_2d[eq_profiles_2d_idx]
     r_eq = p2.grid.dim1
@@ -316,7 +316,7 @@ end
 #! format off
 """
     mesh_psi_spacing(
-    dd::OMAS.dd;
+    dd::IMASDD.dd;
     eq_time_idx::Int64=1,
     eq_profiles_2d_idx::Int64=1,
     grid_ggd_idx::Int64=1,
@@ -346,7 +346,7 @@ spacing_rule: "edge" or "mean" to make spacing of new cells (in psi_N) be the sa
 """
 #! format on
 function mesh_psi_spacing(
-    dd::OMAS.dd;
+    dd::IMASDD.dd;
     eq_time_idx::Int64=1,
     eq_profiles_2d_idx::Int64=1,
     grid_ggd_idx::Int64=1,
@@ -417,7 +417,7 @@ out to the most distant (in flux space) point on the limiting surface.
 Returns a vector of psi_N levels.
 """
 function pick_extension_psi_range(
-    dd::OMAS.dd;
+    dd::IMASDD.dd;
     eq_time_idx::Int64=1,
     eq_profiles_2d_idx::Int64=1,
     grid_ggd_idx::Int64=1,
@@ -553,7 +553,7 @@ function mesh_ext_follow_grad(
     end
 
     # Step along the paths of steepest descent to populate the mesh.
-    dpsindr, dpsindz = OMAS.gradient(r_eq, z_eq, psin_eq)
+    dpsindr, dpsindz = IMASDD.gradient(r_eq, z_eq, psin_eq)
     dpdr = Interpolations.linear_interpolation((r_eq, z_eq), dpsindr)
     dpdz = Interpolations.linear_interpolation((r_eq, z_eq), dpsindz)
     rlim = (minimum(r_eq), maximum(r_eq))
@@ -596,7 +596,7 @@ mesh_r: matrix of R values for the extended mesh
 mesh_z: matrix of Z values for the extended mesh
 """
 function modify_mesh_ext_near_x!(
-    eqt::OMAS.equilibrium__time_slice,
+    eqt::IMASDD.equilibrium__time_slice,
     mesh_r::Matrix{Float64},
     mesh_z::Matrix{Float64},
 )
@@ -873,7 +873,7 @@ clear_cache: delete any existing cache file (for use in testing)
 """
 #!format on
 function cached_mesh_extension!(
-    dd::OMAS.dd,
+    dd::IMASDD.dd,
     eqdsk_file::String,
     b2fgmtry::String;
     eq_time_idx::Int64=1,
@@ -942,7 +942,7 @@ end
 Extends the mesh out into the SOL
 """
 function mesh_extension_sol!(
-    dd::OMAS.dd;
+    dd::IMASDD.dd;
     eq_time_idx::Int64=1,
     eq_profiles_2d_idx::Int64=1,
     grid_ggd_idx::Int64=1,
@@ -989,13 +989,13 @@ end
 
 """
     fill_in_extrapolated_edge_profile!(
-        dd::OMAS.dd, quantity_name::String; method::String="simple",
+        dd::IMASDD.dd, quantity_name::String; method::String="simple",
     )
 
 JUST A PLACEHOLDER FOR NOW. DOESN'T ACTUALLY WORK YET.
 """
 function fill_in_extrapolated_edge_profile!(
-    dd::OMAS.dd,
+    dd::IMASDD.dd,
     quantity_name::String;
     method::String="simple",
     eq_time_idx::Int64=1,
