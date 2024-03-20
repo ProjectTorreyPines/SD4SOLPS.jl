@@ -123,6 +123,10 @@ grid_ggd_idx: index of the grid_ggd to use. For a typical SOLPS run, the SOLPS g
               is used, then this index will need to be specified.
 space_idx: index of the space to use. For a typical SOLPS run, there will be only one
            space so this index will mostly remain at 1.
+cell_subset_idx: index of the subset of cells to use for the extrapolation. The default
+                 is 5, which is the subset of all cells. If edge_profiles data is
+                 instead present for a different subset, for instance, -5, which are
+                 b2.5 cells only, then this index should be set to -5.
 """
 #!format on
 function fill_in_extrapolated_core_profile!(
@@ -133,12 +137,13 @@ function fill_in_extrapolated_core_profile!(
     eq_profiles_2d_idx::Int64=1,
     grid_ggd_idx::Int64=1,
     space_idx::Int64=1,
+    cell_subset_idx::Int64=5,
 )
     check_rho_1d(dd; time_slice=eq_time_idx, throw_on_fail=true)
     grid_ggd = dd.edge_profiles.grid_ggd[grid_ggd_idx]
     space = grid_ggd.space[space_idx]
     cell_subset =
-        get_grid_subset_with_index(grid_ggd, 5)
+        get_grid_subset_with_index(grid_ggd, cell_subset_idx)
     midplane_subset =
         get_grid_subset_with_index(grid_ggd, 11)
 
