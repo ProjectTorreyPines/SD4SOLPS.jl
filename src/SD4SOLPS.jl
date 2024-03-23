@@ -68,13 +68,20 @@ end
 Transfers the equilibrium reconstruction in an EFIT-style gEQDSK file into
 the IMAS DD structure.
 """
-function geqdsk_to_imas!(eqdsk_file, dd; time_index=1)
+function geqdsk_to_imas!(eqdsk_file, dd; set_time=nothing, time_index=1)
     # https://github.com/JuliaFusion/EFIT.jl/blob/master/src/io.jl
-    g = EFIT.readg(eqdsk_file)
+    g = EFIT.readg(eqdsk_file; set_time=set_time)
     # Copying ideas from OMFIT: omfit/omfit_classes/omfit_eqdsk.py / to_omas()
     eq = dd.equilibrium
-    resize!(eq.time_slice, 1)
+    if IMASDD.ismissing(eq, :time)
+        eq.time = Array{Float64}(undef, time_index)
+    end
+    eq.time[time_index] = g.time
+    if length(eq.time_slice) < time_index
+        resize!(eq.time_slice, time_index)
+    end
     eqt = eq.time_slice[time_index]
+    eqt.time = g.time
 
     # 0D
     gq = eqt.global_quantities

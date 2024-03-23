@@ -71,8 +71,14 @@ function add_rho_to_equilibrium!(dd::IMASDD.dd)
                 continue
             end
         end
-        if length(eqt.profiles_1d.phi) == 0
-            resize!(eqt.profiles_1d.phi, n)
+        if (
+            if IMASDD.ismissing(eqt.profiles_1d, :phi)
+                true
+            else
+                IMASDD.isempty(eqt.profiles_1d.phi)
+            end
+        )
+            eqt.profiles_1d.phi = Array{Float64}(undef, n)
             psi2 = eqt.profiles_2d[1].psi
             req = collect(eqt.profiles_2d[1].grid.dim1)
             zeq = collect(eqt.profiles_2d[1].grid.dim2)

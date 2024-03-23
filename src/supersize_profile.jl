@@ -231,10 +231,9 @@ function fill_in_extrapolated_core_profile!(
             ).(psi_for_quantity[in_bounds])
 
         # Make sure the output 1D rho grid exists; create it if needed
-        if length(dd.core_profiles.profiles_1d[it].grid.rho_tor_norm) == 0
-            resize!(dd.core_profiles.profiles_1d[it].grid.rho_tor_norm, 201)
-            # If you don't like this default, then you should write grid.rho_tor_norm before
-            # calling this function.
+        if IMASDD.ismissing(dd.core_profiles.profiles_1d[it].grid, :rho_tor_norm)
+            # If you don't like this default, then you should write grid.rho_tor_norm
+            # before calling this function.
             dd.core_profiles.profiles_1d[it].grid.rho_tor_norm =
                 collect(LinRange(0, 1, 201))
         end
@@ -750,15 +749,9 @@ function record_regular_mesh!(
 
     # Preserve record of standard (non extended) mesh
     for i ∈ 1:5
-        std_sub = get_grid_subset(grid_ggd, -i)
         orig_sub = get_grid_subset(grid_ggd, i)
-        resize!(std_sub.element, length(orig_sub.element))
-        for j ∈ 1:length(orig_sub.element)
-            std_sub.element[j] = deepcopy(orig_sub.element[j])
-        end
-        std_sub.identifier.index = -i
-        std_sub.dimension = deepcopy(orig_sub.dimension)
-        std_sub.metric = deepcopy(orig_sub.metric)
+        grid_ggd.grid_subset[n_existing_subsets+i] = deepcopy(orig_sub)
+        grid_ggd.grid_subset[n_existing_subsets+i].identifier.index = -i
     end
     all_nodes_sub = get_grid_subset(grid_ggd, 1)
     all_edges_sub = get_grid_subset(grid_ggd, 2)

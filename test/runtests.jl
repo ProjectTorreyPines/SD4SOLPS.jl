@@ -183,8 +183,9 @@ if args["core_profile_extension"]
         @test isfile(b2time)
         @test isfile(b2mn)
         @test isfile(eqdsk)
+        eqdsk_time = parse(Float64, split(eqdsk, ".")[end]) / 1000.0
         dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time; b2mn=b2mn)
-        SD4SOLPS.geqdsk_to_imas!(eqdsk, dd)
+        SD4SOLPS.geqdsk_to_imas!(eqdsk, dd; set_time=eqdsk_time)
         rho = dd.equilibrium.time_slice[1].profiles_1d.rho_tor_norm
 
         if !SD4SOLPS.check_rho_1d(dd; time_slice=1)
@@ -219,8 +220,9 @@ if args["edge_profile_extension"]
     @testset "edge_profile_extension" begin
         # Test for getting mesh spacing
         b2fgmtry, b2time, b2mn, eqdsk = define_default_sample_set()
+        eqdsk_time = parse(Float64, split(eqdsk, ".")[end]) / 1000.0
         dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time; b2mn=b2mn)
-        SD4SOLPS.geqdsk_to_imas!(eqdsk, dd)
+        SD4SOLPS.geqdsk_to_imas!(eqdsk, dd; set_time=eqdsk_time)
         dpsin = SD4SOLPS.mesh_psi_spacing(dd)
         @test dpsin > 0.0
 
@@ -298,8 +300,6 @@ if args["heavy_utilities"]
         resize!(dd.core_profiles.profiles_1d, prof_time_idx)
         n = 101
         rho_n = Array(LinRange(0, 1.0, n))
-        resize!(dd.core_profiles.profiles_1d[prof_time_idx].grid.rho_tor_norm, n)
-        resize!(dd.core_profiles.profiles_1d[prof_time_idx].electrons.density, n)
         dd.core_profiles.profiles_1d[prof_time_idx].grid.rho_tor_norm = rho_n
         dd.core_profiles.profiles_1d[prof_time_idx].electrons.density =
             make_test_profile(rho_n)
@@ -356,7 +356,17 @@ if args["geqdsk_to_imas"]
         for sample_file ∈ sample_files
             println(sample_file)
             dd = IMASDD.dd()
-            SD4SOLPS.geqdsk_to_imas!(sample_file, dd; time_index=tslice)
+            if endswith(sample_file, "00")
+                eqdsk_time = parse(Float64, split(sample_file, ".")[end]) / 1000.0
+            else
+                eqdsk_time = nothing
+            end
+            SD4SOLPS.geqdsk_to_imas!(
+                sample_file,
+                dd;
+                set_time=eqdsk_time,
+                time_index=tslice,
+            )
             eqt = dd.equilibrium.time_slice[tslice]
 
             # global
