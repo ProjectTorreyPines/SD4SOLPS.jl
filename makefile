@@ -14,7 +14,7 @@ env_with_cloned_repo r:
 	@echo "Cloning the repositories and generating Manifest.toml"
 	-dn=$(shell dirname $(shell pwd)); \
 	if [[ "$${dn:(-10)}" == ".julia/dev" ]]; then ext="" ; else ext=".jl";fi; \
-	git clone "git@github.com:ProjectTorreyPines/IMASDD.jl.git" ../OMAS$${ext}; \
+	git clone "git@github.com:ProjectTorreyPines/OMAS.jl.git" ../OMAS$${ext}; \
 	git clone "git@github.com:ProjectTorreyPines/IMASDD.jl.git" ../IMASDD$${ext}; \
 	git clone "git@github.com:ProjectTorreyPines/GGDUtils.jl.git" ../GGDUtils$${ext}; \
 	git clone "git@github.com:ProjectTorreyPines/SOLPS2IMAS.jl.git" ../SOLPS2IMAS$${ext}; \
