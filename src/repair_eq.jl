@@ -17,7 +17,7 @@ export check_rho_1d
 
 Checks to see if rho exists and is valid in the equilibrium 1d profiles
 """
-function check_rho_1d(dd::OMAS.dd; time_slice::Int64=1, throw_on_fail::Bool=false)
+function check_rho_1d(dd::IMASDD.dd; time_slice::Int64=1, throw_on_fail::Bool=false)
     rho = dd.equilibrium.time_slice[time_slice].profiles_1d.rho_tor_norm
     if length(rho) < 1
         rho_okay = false
@@ -48,11 +48,11 @@ function check_rho_1d(dd::OMAS.dd; time_slice::Int64=1, throw_on_fail::Bool=fals
 end
 
 """
-    function add_rho_to_equilibrium(dd:OMAS.dd)
+    function add_rho_to_equilibrium(dd:IMASDD.dd)
 
 Adds equilibrium rho profile to the DD
 """
-function add_rho_to_equilibrium!(dd::OMAS.dd)
+function add_rho_to_equilibrium!(dd::IMASDD.dd)
     nt = length(dd.equilibrium.time_slice)
     if nt < 1
         println("No equilibrium time slices to work with; can't add rho")
@@ -71,8 +71,14 @@ function add_rho_to_equilibrium!(dd::OMAS.dd)
                 continue
             end
         end
-        if length(eqt.profiles_1d.phi) == 0
-            resize!(eqt.profiles_1d.phi, n)
+        if (
+            if IMASDD.ismissing(eqt.profiles_1d, :phi)
+                true
+            else
+                IMASDD.isempty(eqt.profiles_1d.phi)
+            end
+        )
+            eqt.profiles_1d.phi = Array{Float64}(undef, n)
             psi2 = eqt.profiles_2d[1].psi
             req = collect(eqt.profiles_2d[1].grid.dim1)
             zeq = collect(eqt.profiles_2d[1].grid.dim2)
