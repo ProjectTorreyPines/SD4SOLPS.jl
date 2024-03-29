@@ -1,6 +1,6 @@
 module SD4SOLPS
 
-import OMAS as IMASDD
+using IMASDD: IMASDD
 using SOLPS2IMAS: SOLPS2IMAS
 using EFIT: EFIT
 using Interpolations: Interpolations
