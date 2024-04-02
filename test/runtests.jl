@@ -1,6 +1,6 @@
 using SD4SOLPS: SD4SOLPS
 using SOLPS2IMAS: SOLPS2IMAS
-import OMAS as IMASDD
+using IMASDD: IMASDD
 using EFIT: EFIT
 using Plots
 using Test

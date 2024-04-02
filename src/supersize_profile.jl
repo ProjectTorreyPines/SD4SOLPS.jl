@@ -3,7 +3,7 @@ Utilities for extrapolating profiles
 """
 
 # import CalculusWithJulia
-import OMAS as IMASDD
+using IMASDD: IMASDD
 using Interpolations: Interpolations
 using GGDUtils:
     GGDUtils, get_grid_subset, add_subset_element!, get_subset_boundary,
