@@ -14,6 +14,7 @@ solps2imas_samples = splitdir(pathof(SOLPS2IMAS))[1] * "/../samples"
 dd = SD4SOLPS.preparation(
     "Baseline2008-li0.70.x4.mod2.eqdsk",
     [sample_path, solps2imas_samples]...;
+    eqdsk_set_time=0.0,
 )
 
 grid_ggd = dd.edge_profiles.grid_ggd[1] # First grid_ggd time slice. It is allowed to vary in time

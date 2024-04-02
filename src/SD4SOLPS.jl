@@ -268,6 +268,8 @@ function preparation(
     edge_method::String="simple",
     filename::String="sd_input_data",
     output_format::String="json",
+    eqdsk_set_time=nothing,
+    eq_time_index=1,
 )
     b2fgmtry, b2time, b2mn, eqdsk =
         find_files_in_allowed_folders(dirs...; eqdsk_file=eqdsk_file)
@@ -278,7 +280,7 @@ function preparation(
     println("    eqdsk = ", eqdsk)
 
     dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time; b2mn=b2mn)
-    geqdsk_to_imas!(eqdsk, dd)
+    geqdsk_to_imas!(eqdsk, dd; set_time=eqdsk_set_time, time_index=eq_time_index)
     # Repairs
     add_rho_to_equilibrium!(dd)  # Doesn't do anything if rho is valid
     println("Loaded input data into IMAS DD")
