@@ -7,7 +7,7 @@ using IMASDD: IMASDD
 using Interpolations: Interpolations
 using GGDUtils:
     GGDUtils, get_grid_subset, add_subset_element!, get_subset_boundary,
-    project_prop_on_subset!, get_subset_centers
+    project_prop_on_subset!, get_subset_centers, get_TPS_mats
 using PolygonOps: PolygonOps
 using JSON: JSON
 
@@ -61,8 +61,8 @@ function extrapolate_core(edge_rho, edge_quantity, rho_output)
     gmid = -abs(gf) / 4.0
     rmid = rf / 2.0
     rped_enforce = rf - 0.08
-    gped_enforce = rf + (gmid - gf) / (rmid - rf) * rped_enforce
-    gped_max = maximum(grad) / 10.0
+    gped_enforce = gf + (gmid - gf) / (rmid - rf) * rped_enforce
+    gped_max = maximum(grad) / 2.0
     gped_enforce = minimum([abs(gped_enforce), abs(gped_max)]) * sign(gf)
 
     gg = [0, gmid, gped_enforce, gf]
@@ -172,6 +172,7 @@ function fill_in_extrapolated_core_profile!(
     if length(dd.core_profiles.profiles_1d) < nt
         resize!(dd.core_profiles.profiles_1d, nt)
     end
+    TPS_mats = get_TPS_mats(grid_ggd, cell_subset_idx)
     for it ∈ 1:nt
         tags = split(quantity_name, ".")
         quantity_str = dd.edge_profiles.ggd[it]
@@ -184,7 +185,7 @@ function fill_in_extrapolated_core_profile!(
             cell_subset,
             midplane_subset,
             space;
-            interp_method=:KDTree,
+            TPS_mats=TPS_mats,
         )
         # Now quantity is at the outboard midplane
 
