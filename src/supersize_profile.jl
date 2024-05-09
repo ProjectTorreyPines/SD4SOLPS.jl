@@ -2,7 +2,6 @@
 Utilities for extrapolating profiles
 """
 
-# import CalculusWithJulia
 using IMASDD: IMASDD
 using Interpolations: Interpolations
 using GGDUtils:
@@ -11,13 +10,14 @@ using GGDUtils:
 using PolygonOps: PolygonOps
 using JSON: JSON
 
-export extrapolate_core
-export fill_in_extrapolated_core_profile
-export mesh_psi_spacing
-export find_x_points!
+export extrapolate_core,
+    fill_in_extrapolated_core_profile!, mesh_psi_spacing, cached_mesh_extension!
 
 """
-    cumul_integrate(x::AbstractVector, y::AbstractVector)
+    cumul_integrate(
+        x::AbstractVector,
+        y::AbstractVector,
+    )::AbstractVector
 
 Computes cumulative integral of y(x) using trapezoidal rule.
 Source code from obsolete NumericalIntegration.jl package.
@@ -25,7 +25,10 @@ https://github.com/dextorious/NumericalIntegration.jl/blob/540b6c4bee089dfef7b9a
 Modified the code to remove use of @inbounds, @fastmath macros that Julia documentation
 recommends to use with caution.
 """
-function cumul_integrate(x::AbstractVector, y::AbstractVector)
+function cumul_integrate(
+    x::AbstractVector,
+    y::AbstractVector,
+)::AbstractVector
     init = (x[2] - x[1]) * (y[1] + y[2])
     n = length(x)
     retarr = Vector{typeof(init)}(undef, n)
@@ -38,7 +41,11 @@ function cumul_integrate(x::AbstractVector, y::AbstractVector)
 end
 
 """
-    extrapolate_core(edge_rho, edge_quantity, rho_output)
+    extrapolate_core(
+        edge_rho::Vector{Float64},
+        edge_quantity::Vector{Float64},
+        rho_output::Vector{Float64},
+    )::Vector{Float64}
 
 Function for assuming a core profile when given edge profile data.
 
@@ -54,7 +61,11 @@ Concept:
  5. after making up a very simple gradient profile out of a few line segments,
     integrate it to get the profile of the quantity in question
 """
-function extrapolate_core(edge_rho, edge_quantity, rho_output)
+function extrapolate_core(
+    edge_rho::Vector{Float64},
+    edge_quantity::Vector{Float64},
+    rho_output::Vector{Float64},
+)::Vector{Float64}
     grad = IMASDD.gradient(edge_rho, edge_quantity)
     gf = grad[1]
     rf = edge_rho[1]
@@ -89,46 +100,48 @@ function extrapolate_core(edge_rho, edge_quantity, rho_output)
         ).(rho_output[rho_output.>=rf])
     return output_profile
 end
-#!format off
+
 """
     fill_in_extrapolated_core_profile!(
-    dd::IMASDD.dd,
-    quantity_name::String;
-    method::String="simple",
-    eq_time_idx::Int64=1,
-    eq_profiles_2d_idx::Int64=1,
-    grid_ggd_idx::Int64=1,
-    space_idx::Int64=1,
-)
+        dd::IMASDD.dd,
+        quantity_name::String;
+        method::String="simple",
+        eq_time_idx::Int64=1,
+        eq_profiles_2d_idx::Int64=1,
+        grid_ggd_idx::Int64=1,
+        space_idx::Int64=1,
+    )
 
-
-This function accepts a DD that should be populated with equilibrium and edge_profiles
-as well as a request for a quantity to extrapolate into the core. It then maps
-edge_profiles data to rho, calls the function that performs the extrapolation (which is
+This function accepts a DD that should be populated with `equilibrium` and
+`edge_profiles` as well as a request for a quantity to extrapolate into the core. It
+then maps `edge_profiles` data to rho, calls the function that performs the extrapolation (which is
 not a simple linear extrapolation but has some trickery to attempt to make a somewhat
 convincing profile shape), and writes the result to core_profiles. This involves a bunch
 of interpolations and stuff.
-dd: an IMAS data dictionary
-quantity_name: the name of a quantity in edge_profiles.profiles_2d and
-               core_profiles.profiles_1d, such as "electrons.density"
-method: Extrapolation method.
-eq_time_idx: index of the equilibrium time slice to use. For a typical SOLPS run,
-             the SOLPS mesh will be based on the equilibrium reconstruction at a single
-             time, so the DD associated with the SOLPS run only needs one equilibrium
-             time slice to be loaded. However, one could combine the complete
-             equilibrium time series with the SOLPS run and then have to specify which
-             slice of the equilibrium corresponds to the SOLPS mesh.
-grid_ggd_idx: index of the grid_ggd to use. For a typical SOLPS run, the SOLPS grid is
-              fixed, so this index defaults to 1. But in future, if a time varying grid
-              is used, then this index will need to be specified.
-space_idx: index of the space to use. For a typical SOLPS run, there will be only one
-           space so this index will mostly remain at 1.
-cell_subset_idx: index of the subset of cells to use for the extrapolation. The default
-                 is 5, which is the subset of all cells. If edge_profiles data is
-                 instead present for a different subset, for instance, -5, which are
-                 b2.5 cells only, then this index should be set to -5.
+
+Input arguments:
+
+  - `dd`: an IMAS data dictionary
+  - `quantity_name`: the name of a quantity in `edge_profiles.profiles_2d` and
+    `core_profiles.profiles_1d`, such as "electrons.density"
+  - `method`: Extrapolation method.
+  - `eq_time_id`x: index of the equilibrium time slice to use. For a typical SOLPS run,
+    the SOLPS mesh will be based on the equilibrium reconstruction at a single
+    time, so the DD associated with the SOLPS run only needs one equilibrium
+    time slice to be loaded. However, one could combine the complete
+    equilibrium time series with the SOLPS run and then have to specify which
+    slice of the equilibrium corresponds to the SOLPS mesh.
+  - `eq_profiles_2d_idx`: index of the `profiles_2D` in equilibrium `time_slice`.
+  - `grid_ggd_idx`: index of the `grid_ggd` to use. For a typical SOLPS run, the SOLPS
+    grid is fixed, so this index defaults to 1. But in future, if a time varying grid is
+    used, then this index will need to be specified.
+  - `space_id`x: index of the space to use. For a typical SOLPS run, there will be only
+    one space so this index will mostly remain at 1.
+  - `cell_subset_idx`: index of the subset of cells to use for the extrapolation. The
+    default is 5, which is the subset of all cells. If `edge_profiles` data is instead
+    present for a different subset, for instance, -5, which are b2.5 cells only, then
+    this index should be set to -5.
 """
-#!format on
 function fill_in_extrapolated_core_profile!(
     dd::IMASDD.dd,
     quantity_name::String;
@@ -142,10 +155,8 @@ function fill_in_extrapolated_core_profile!(
     check_rho_1d(dd; time_slice=eq_time_idx, throw_on_fail=true)
     grid_ggd = dd.edge_profiles.grid_ggd[grid_ggd_idx]
     space = grid_ggd.space[space_idx]
-    cell_subset =
-        get_grid_subset(grid_ggd, cell_subset_idx)
-    midplane_subset =
-        get_grid_subset(grid_ggd, 11)
+    cell_subset = get_grid_subset(grid_ggd, cell_subset_idx)
+    midplane_subset = get_grid_subset(grid_ggd, 11)
 
     if length(midplane_subset.element) < 1
         throw(
@@ -258,38 +269,43 @@ function fill_in_extrapolated_core_profile!(
 end
 
 """
-    function extrapolate_edge_exp(
+    extrapolate_edge_exp(
         quantity_edge::Vector{Float64},
         dqdpsi::Vector{Float64},
         psin_out::Vector{Float64},
-    )
+    )::Matrix{Float64}
 
 Exponential decay version of edge profile extrapolation. Should work well for
 many quantities, including Te and ne. If the exponential profile has no background
 offset, then its amplitude and scale length can be completely defined by matching
 the quantity value and first derivative at the edge of the mesh.
 
-quantity_edge: values of some physics quantity in cells along the outer edge of the mesh
-dqdpsi: Gradient of the quantity vs. psi, aligned perpendicular to the row of cells
-being used.
-psin_out: Normalized psi values along a vector orthogonal to the row of cells along the
-edge. These psi_N values should be outside of the mesh (because the quantity is
-already known in the mesh).
+Input Arguments:
+
+  - `quantity_edge`: values of some physics quantity in cells along the outer edge of
+    the mesh.
+
+  - `dqdpsi`: Gradient of the quantity vs. psi, aligned perpendicular to the row of
+    cells being used.
+  - `psin_out`: Normalized psi values along a vector orthogonal to the row of cells
+    along the edge. These `psi_N` values should be outside of the mesh (because the
+    quantity is already known in the mesh).
+
 The output will be a matrix.
 """
 function extrapolate_edge_exp(
     quantity_edge::Vector{Float64},
     dqdpsi::Vector{Float64},
     psin_out::Vector{Float64},
-)
+)::Matrix{Float64}
     x = psin_out - 1.0
     lambda = -quantity_edge / dqdpsi
     q0 = quantity_edge ./ exp(-x' ./ lambda)
-    return y0 * exp(-x ./ lambda)
+    return q0 * exp(-x ./ lambda)
 end
 
 """
-    prep_flux_map()
+    prep_flux_map(dd::IMASDD.dd; eq_time_idx::Int64=1, eq_profiles_2d_idx::Int64=1)
 
 Reads equilibrium data and extracts/derives some useful quantities.
 This is very basic, but it was being repeated and that's a no-no.
@@ -313,38 +329,40 @@ function prep_flux_map(dd::IMASDD.dd; eq_time_idx::Int64=1, eq_profiles_2d_idx::
     return r_eq, z_eq, psin_eq, rzpi
 end
 
-#! format off
 """
     mesh_psi_spacing(
-    dd::IMASDD.dd;
-    eq_time_idx::Int64=1,
-    eq_profiles_2d_idx::Int64=1,
-    grid_ggd_idx::Int64=1,
-    space_idx::Int64=1,
-
-)
+        dd::IMASDD.dd;
+        eq_time_idx::Int64=1,
+        eq_profiles_2d_idx::Int64=1,
+        grid_ggd_idx::Int64=1,
+        space_idx::Int64=1,
+        avoid_guard_cell::Bool=true,
+        spacing_rule="mean",
+    )
 
 Inspects the mesh to see how far apart faces are in psi_N.
 Requires that GGD and equilibrium are populated.
 
-dd: a data dictionary instance with required data loaded into it
-eq_time_idx: index of the equilibrium time slice to use. For a typical SOLPS run,
-             the SOLPS mesh will be based on the equilibrium reconstruction at a single
-             time, so the DD associated with the SOLPS run only needs one equilibrium
-             time slice to be loaded. However, one could combine the complete
-             equilibrium time series with the SOLPS run and then have to specify which
-             slice of the equilibrium corresponds to the SOLPS mesh.
-grid_ggd_idx: index of the grid_ggd to use. For a typical SOLPS run, the SOLPS grid is
-              fixed, so this index defaults to 1. But in future, if a time varying grid
-              is used, then this index will need to be specified.
-space_idx: index of the space to use. For a typical SOLPS run, there will be only one
-           space so this index will mostly remain at 1.
-avoid_guard_cell: assume that the last cell is a guard cell so take end-2 and end-1
-                  instead of end and end-1
-spacing_rule: "edge" or "mean" to make spacing of new cells (in psi_N) be the same
-              as the spacing at the edge of the mesh, or the same as the average spacing
+Input Arguments:
+
+  - `dd`: a data dictionary instance with required data loaded into it
+  - `eq_time_idx`: index of the equilibrium time slice to use. For a typical SOLPS run,
+    the SOLPS mesh will be based on the equilibrium reconstruction at a single
+    time, so the DD associated with the SOLPS run only needs one equilibrium
+    time slice to be loaded. However, one could combine the complete
+    equilibrium time series with the SOLPS run and then have to specify which
+    slice of the equilibrium corresponds to the SOLPS mesh.
+  - `eq_profiles_2d_id`x: index of the `profiles_2D` in equilibrium `time_slice`.
+  - `grid_ggd_idx`: index of the `grid_ggd` to use. For a typical SOLPS run, the SOLPS
+    grid is fixed, so this index defaults to 1. But in future, if a time varying grid
+    is used, then this index will need to be specified.
+  - `space_idx`: index of the space to use. For a typical SOLPS run, there will be only
+    one space so this index will mostly remain at 1.
+  - `avoid_guard_cell`: assume that the last cell is a guard cell so take `end-2` and
+    `end-1` instead of `end` and `end-1`
+  - `spacing_rule`: "edge" or "mean" to make spacing of new cells (in `psi_N`) be the
+    same as the spacing at the edge of the mesh, or the same as the average spacing
 """
-#! format on
 function mesh_psi_spacing(
     dd::IMASDD.dd;
     eq_time_idx::Int64=1,
@@ -382,8 +400,7 @@ function mesh_psi_spacing(
     # weird. So use the outboard midplane. That's always a solid choice.
     grid_ggd = dd.edge_profiles.grid_ggd[grid_ggd_idx]
     space = grid_ggd.space[space_idx]
-    midplane_subset =
-        get_grid_subset(grid_ggd, 11)
+    midplane_subset = get_grid_subset(grid_ggd, 11)
     midplane_cell_centers = get_subset_centers(space, midplane_subset)
     r_mesh = [midplane_cell_centers[i][1] for i ∈ eachindex(midplane_cell_centers)]
     z_mesh = [midplane_cell_centers[i][2] for i ∈ eachindex(midplane_cell_centers)]
@@ -409,12 +426,18 @@ function mesh_psi_spacing(
 end
 
 """
-    pick_extension_psi_range()
+    pick_extension_psi_range(
+        dd::IMASDD.dd;
+        eq_time_idx::Int64=1,
+        eq_profiles_2d_idx::Int64=1,
+        grid_ggd_idx::Int64=1,
+        space_idx::Int64=1,
+    )::Vector{Float64}
 
-Defines the psi_N levels for an extended mesh. The range of psi_N levels starts
-at the outer edge of the existing edge_profiles mesh at the midplane and goes
+Defines the `psi_N` levels for an extended mesh. The range of `psi_N` levels starts
+at the outer edge of the existing `edge_profiles` mesh at the midplane and goes
 out to the most distant (in flux space) point on the limiting surface.
-Returns a vector of psi_N levels.
+Returns a vector of `psi_N` levels.
 """
 function pick_extension_psi_range(
     dd::IMASDD.dd;
@@ -422,7 +445,7 @@ function pick_extension_psi_range(
     eq_profiles_2d_idx::Int64=1,
     grid_ggd_idx::Int64=1,
     space_idx::Int64=1,
-)
+)::Vector{Float64}
     r_eq, z_eq, psin_eq, rzpi = prep_flux_map(dd; eq_time_idx, eq_profiles_2d_idx)
 
     # Use wall to find maximum extent of contouring project
@@ -465,17 +488,20 @@ function pick_extension_psi_range(
 end
 
 """
-    pick_mesh_ext_starting_points(dd; grid_ggd_idx, space_idx)
+    pick_mesh_ext_starting_points(
+        grid_ggd::IMASDD.edge_profiles__grid_ggd,
+        space::IMASDD.edge_profiles__grid_ggd___space,
+    )::Tuple{Vector{Float64}, Vector{Float64}}
 
 Picks starting points for the radial lines of the mesh extension. The strategy
 is to start from the outer edge of the existing mesh and follow the steepest
 gradient (of psi_N) to extend these gridlines outward.
-dd: a data dictionary instance with edge_profiles ggd and equilibrium loaded
-grid_ggd_idx: index within ggd
-space_idx: space number / index of the space to work with within edge_profiles
 Returns a tuple with vectors of R and Z starting points.
 """
-function pick_mesh_ext_starting_points(grid_ggd, space)
+function pick_mesh_ext_starting_points(
+    grid_ggd::IMASDD.edge_profiles__grid_ggd,
+    space::IMASDD.edge_profiles__grid_ggd___space,
+)::Tuple{Vector{Float64}, Vector{Float64}}
     # Choose starting points for the orthogonal (to the contour) gridlines
     # Use the existing cells of the standard mesh
     all_cell_subset = get_grid_subset(grid_ggd, 5)
@@ -508,28 +534,39 @@ function pick_mesh_ext_starting_points(grid_ggd, space)
     return r, z
 end
 
-#!format off
 """
-    mesh_ext_follow_grad()
+    mesh_ext_follow_grad(
+        r_eq::Vector{Float64},
+        z_eq::Vector{Float64},
+        psin_eq::Matrix,
+        rstart::Vector{Float64},
+        zstart::Vector{Float64},
+        nlvl::Int64,
+        dpsin::Float64,
+        rzpi=nothing,
+    )::Tuple{Matrix{Float64}, Matrix{Float64}}
 
 Follows the steepest gradient from a set of starting points, dropping nodes at
 approximately regular intervals in psi_N. Due to the numerical techniques used, the
 node spacing may be imperfect (especially prone to error in regions where curvature
-of psi_N is large compared to its gradient).
-r_eq: Equilibrium reconstruction's grid, R coordinates
-z_eq: Equilibrium reconstruction's grid, Z coordinates
-psin_eq: Normalized poloidal flux in the equilibrium reconstruction as a function of R and Z
-rstart: R coordinates of starting points for the gradient following.
-zstart: Z coordinates of starting points
-nlvl: number of nodes to drop while following the gradient
-dpsin: node spacing in delta psi_N
-rzpi: linear interpolation of psin_eq() as a function of r_eq and z_eq
-    This was probably already computed and I think time would be saved by reusing it.
-    If you don't already have it, you can pass in nothing and let this function calculate it.
+of `psi_N` is large compared to its gradient).
+
+Input Arguments:
+
+  - `r_eq`: Equilibrium reconstruction's grid, R coordinates
+  - `z_eq`: Equilibrium reconstruction's grid, Z coordinates
+  - `psin_eq`: Normalized poloidal flux in the equilibrium reconstruction as a function
+    of R and Z
+  - `rstar`t: R coordinates of starting points for the gradient following.
+  - `zstart`: Z coordinates of starting points
+  - `nlvl`: number of nodes to drop while following the gradient
+  - `dpsin`: node spacing in delta psi_N
+  - `rzpi`: linear interpolation of psin_eq() as a function of r_eq and z_eq. This was
+    probably already computed and I think time would be saved by reusing it. If you
+    don't already have it, you can pass in nothing and let this function calculate it.
 
 Returns two matrices with R and Z coordinates of the mesh extension
 """
-#!format on
 function mesh_ext_follow_grad(
     r_eq::Vector{Float64},
     z_eq::Vector{Float64},
@@ -539,7 +576,7 @@ function mesh_ext_follow_grad(
     nlvl::Int64,
     dpsin::Float64,
     rzpi=nothing,
-)
+)::Tuple{Matrix{Float64}, Matrix{Float64}}
     npol = length(rstart)
     mesh_r = zeros((npol, nlvl))
     mesh_z = zeros((npol, nlvl))
@@ -587,13 +624,20 @@ function mesh_ext_follow_grad(
 end
 
 """
-    modify_mesh_ext_near_x!
+    modify_mesh_ext_near_x!(
+        eqt::IMASDD.equilibrium__time_slice,
+        mesh_r::Matrix{Float64},
+        mesh_z::Matrix{Float64},
+    )
 
 Modifies an extended mesh near a secondary X-point to compensate for the
 tendency of the mesh to go nuts near the X-point.
-eqt: equilibrium.time_slice information
-mesh_r: matrix of R values for the extended mesh
-mesh_z: matrix of Z values for the extended mesh
+
+Input Arguments:
+
+  - `eqt`: equilibrium.time_slice information
+  - `mesh_r`: matrix of R values for the extended mesh
+  - `mesh_z`: matrix of Z values for the extended mesh
 """
 function modify_mesh_ext_near_x!(
     eqt::IMASDD.equilibrium__time_slice,
@@ -677,24 +721,29 @@ function modify_mesh_ext_near_x!(
     end
 end
 
-#!format off
 """
-    record_regular_mesh!()
+    record_regular_mesh!(
+        grid_ggd::IMASDD.edge_profiles__grid_ggd,
+        space::IMASDD.edge_profiles__grid_ggd___space,
+        mesh_r::Matrix{Float64},
+        mesh_z::Matrix{Float64},
+        cut::Int64,
+    )
 
 Records arrays of mesh data from regular 2D arrays into the DD
-grid_ggd: grid_ggd within edge_profiles
-space: space in edge_profiles
-mesh_r: Matrix of R values along a mesh. Should be 2D. The two dimensions are in
-        the radial and poloidal directions.
-mesh_z: Z values to go with mesh_r.
-cut: Poloidal index of a cut between two groups of disconnected cells. Poloidal
-     connections (faces, cells) will not be added between this poloidal index
-     and the next index.
+
+  - `grid_ggd`: `grid_ggd` within edge_profiles
+  - `space`: space in edge_profiles
+  - `mesh_r`: Matrix of R values along a mesh. Should be 2D. The two dimensions are in
+    the radial and poloidal directions.
+  - `mesh_z`: Z values to go with mesh_r.
+  - `cut`: Poloidal index of a cut between two groups of disconnected cells. Poloidal
+    connections (faces, cells) will not be added between this poloidal index
+    and the next index.
 """
-#!format on
 function record_regular_mesh!(
-    grid_ggd,
-    space,
+    grid_ggd::IMASDD.edge_profiles__grid_ggd,
+    space::IMASDD.edge_profiles__grid_ggd___space,
     mesh_r::Matrix{Float64},
     mesh_z::Matrix{Float64},
     cut::Int64,
@@ -826,7 +875,7 @@ function record_regular_mesh!(
 end
 
 """
-    convert_filename(filename::String)
+    convert_filename(filename::String)::String
 
 Converts a filename into a string that doesn't have illegal characters.
 The main application is removing the path separator from source files with full
@@ -835,7 +884,7 @@ files used to form some data can be part of the cache name, allowing quick looku
 the cache filename is defined by the input files, and if it doesn't exist, it
 needs to be generated.
 """
-function convert_filename(filename::String)
+function convert_filename(filename::String)::String
     filename_mod = replace(filename, "/" => "__")  # Illegal on *nix bc it's the path separator
     filename_mod = replace(filename_mod, ":" => "--")  # Illegal on mac and windows
     filename_mod = replace(filename_mod, "\\" => "__")  # Illegal on windows
@@ -848,24 +897,34 @@ function convert_filename(filename::String)
     return filename_mod
 end
 
-#!format off
 """
-    cached_mesh_extension!()
+    cached_mesh_extension!(
+        dd::IMASDD.dd,
+        eqdsk_file::String,
+        b2fgmtry::String;
+        eq_time_idx::Int64=1,
+        eq_profiles_2d_idx::Int64=1,
+        grid_ggd_idx::Int64=1,
+        space_idx::Int64=1,
+        clear_cache::Bool=false,
+    )::String
 
 Adds an extended mesh to a data dictionary, possibly from a cached result.
-dd: The data dictionary. It will be modified in place.
-eqdsk_file: the name of the EQDSK file that was used to get equilibrium data in
-            the dd.
-b2fgmtry: the name of the SOLPS geometry file that was used to get GGD info in
-          edge_profiles in the dd.
-eq_time_idx: Index of the time slice in equilibrium
-eq_profiles_2d_idx: Index of the 2D profile set in equilibrium
-                    (there is usually only one)
-grid_ggd_idx: Index of the grid_ggd set in edge_profiles
-space_idx: Index of the space
-clear_cache: delete any existing cache file (for use in testing)
+
+Input Arguments:
+
+  - `dd`: The data dictionary. It will be modified in place.
+  - `eqdsk_file`: the name of the EQDSK file that was used to get equilibrium data in
+    the dd.
+  - `b2fgmtry`: the name of the SOLPS geometry file that was used to get GGD info in
+    `edge_profiles` in the dd.
+  - `eq_time_idx`: Index of the time slice in equilibrium
+  - `eq_profiles_2d_idx`: Index of the 2D profile set in equilibrium
+    (there is usually only one)
+  - `grid_ggd_idx`: Index of the `grid_ggd` set in edge_profiles
+  - `space_idx`: Index of the space
+  - `clear_cache`: delete any existing cache file (for use in testing)
 """
-#!format on
 function cached_mesh_extension!(
     dd::IMASDD.dd,
     eqdsk_file::String,
@@ -874,8 +933,8 @@ function cached_mesh_extension!(
     eq_profiles_2d_idx::Int64=1,
     grid_ggd_idx::Int64=1,
     space_idx::Int64=1,
-    clear_cache=false,
-)
+    clear_cache::Bool=false,
+)::String
     path = "$(@__DIR__)/../data/"
     cached_ext_name = path * string(hash(eqdsk_file * b2fgmtry)) * ".mesh_ext.json"
     if clear_cache
@@ -931,7 +990,13 @@ function cached_mesh_extension!(
 end
 
 """
-    function mesh_extension_sol()
+    mesh_extension_sol!(
+        dd::IMASDD.dd;
+        eq_time_idx::Int64=1,
+        eq_profiles_2d_idx::Int64=1,
+        grid_ggd_idx::Int64=1,
+        space_idx::Int64=1,
+    )
 
 Extends the mesh out into the SOL
 """
@@ -983,7 +1048,10 @@ end
 
 """
     fill_in_extrapolated_edge_profile!(
-        dd::IMASDD.dd, quantity_name::String; method::String="simple",
+        dd::IMASDD.dd,
+        quantity_name::String;
+        method::String="simple",
+        eq_time_idx::Int64=1,
     )
 
 JUST A PLACEHOLDER FOR NOW. DOESN'T ACTUALLY WORK YET.
