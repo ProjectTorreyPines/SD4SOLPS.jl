@@ -4,4 +4,5 @@
 # environment.
 Manifest.toml
 sd_input_data.json
-example/Project.toml
+example/*.toml
+docs/build

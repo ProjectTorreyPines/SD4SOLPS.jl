@@ -13,11 +13,8 @@ function parse_commandline()
     s = ArgParse.ArgParseSettings(; description="Run tests. Default is all tests.")
 
     ArgParse.add_arg_table!(s,
-        ["--lightweight_utilities"],
-        Dict(:help => "Test only lightweight utilities",
-            :action => :store_true),
-        ["--actuator"],
-        Dict(:help => "Test only actuator model",
+        ["--unit_utils"],
+        Dict(:help => "Test only unit conversion utilities",
             :action => :store_true),
         ["--core_profile_extension"],
         Dict(:help => "Test only core profile extension",
@@ -104,7 +101,6 @@ function define_default_sample_set()
     file_list = SD4SOLPS.find_files_in_allowed_folders(
         sample_path, sample_path2, sample_path3, sample_path4;
         eqdsk_file="thereisntoneyet",
-        allow_reduced_versions=false,
     )
     b2fgmtry, b2time, b2mn, eqdsk = file_list
     eqdsk =
@@ -113,8 +109,8 @@ function define_default_sample_set()
     return b2fgmtry, b2time, b2mn, eqdsk
 end
 
-if args["lightweight_utilities"]
-    @testset "lightweight_utilities" begin
+if args["unit_utils"]
+    @testset "Unit conversion utilities" begin
         # Gas unit converter
         flow_tls = 40.63 * Unitful.Torr * Unitful.L / Unitful.s
         flow_pam3 = SD4SOLPS.gas_unit_converter(flow_tls, "torr L s^-1", "Pa m^3 s^-1")
@@ -144,21 +140,6 @@ if args["lightweight_utilities"]
         )
         @test flow_molecules1 > flow_molecules2
         @test (Unitful.upreferred(flow_molecules2)).val == flow_molecules3
-    end
-end
-
-if args["actuator"]
-    @testset "actuator" begin
-        t = collect(LinRange(0, 2.0, 1001))
-        cmd = (t .> 1.0) * 1.55 + (t .> 1.5) * 0.93 + (t .> 1.8) * 0.25
-
-        instant_flow_function = SD4SOLPS.model_gas_valve("instant")
-        instant_flow = instant_flow_function(t, cmd)
-        @test length(instant_flow) == length(cmd)
-
-        simple_flow_function = SD4SOLPS.model_gas_valve("simple")
-        simple_flow = simple_flow_function(t, cmd)
-        @test length(simple_flow) == length(cmd)
     end
 end
 
@@ -278,7 +259,7 @@ if args["heavy_utilities"]
         # Test for finding files in allowed folders
         sample_path = splitdir(pathof(SOLPS2IMAS))[1] * "/../samples"
         file_list = SD4SOLPS.find_files_in_allowed_folders(
-            sample_path; eqdsk_file="thereisntoneyet", allow_reduced_versions=true,
+            sample_path; eqdsk_file="thereisntoneyet",
         )
         @test length(file_list) == 4
         b2fgmtry, b2time, b2mn, eqdsk = file_list
@@ -315,7 +296,11 @@ if args["heavy_utilities"]
             println("DD was repaired (rho added) for core 2d utility test")
         end
         density_on_grid =
-            SD4SOLPS.core_profile_2d(dd, prof_time_idx, eq_time_idx, quantity).(r, z)
+            GGDUtils.interp(
+                dd.core_profiles.profiles_1d[1].electrons.density,
+                dd.core_profiles.profiles_1d[1],
+                dd.equilibrium.time_slice[1],
+            ).(r, z)
         @test size(density_on_grid) == (length(rg), length(zg))
     end
 end
@@ -449,9 +434,8 @@ if args["preparation"]
         output_format = "json"
         dd = SD4SOLPS.preparation(
             eqdsk_file,
-            sample_paths...;
+            sample_paths;
             core_method=core_method,
-            edge_method=edge_method,
             filename=filename,
             output_format=output_format,
         )

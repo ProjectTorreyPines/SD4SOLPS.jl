@@ -13,11 +13,19 @@ export add_rho_to_equilibrium!
 export check_rho_1d
 
 """
-    function check_rho_1d()
+    check_rho_1d(
+        dd::IMASDD.dd;
+        time_slice::Int64=1,
+        throw_on_fail::Bool=false,
+    )::Bool
 
 Checks to see if rho exists and is valid in the equilibrium 1d profiles
 """
-function check_rho_1d(dd::IMASDD.dd; time_slice::Int64=1, throw_on_fail::Bool=false)
+function check_rho_1d(
+    dd::IMASDD.dd;
+    time_slice::Int64=1,
+    throw_on_fail::Bool=false,
+)::Bool
     rho = dd.equilibrium.time_slice[time_slice].profiles_1d.rho_tor_norm
     if length(rho) < 1
         rho_okay = false
