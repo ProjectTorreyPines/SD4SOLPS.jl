@@ -15,7 +15,7 @@ Steps:
 3) Make assumptions to extend profiles into the core and far SOL, if needed
 4) Run synthetic diagnostic models and record output
 
-For installation and usage instructions, see the [online documentation](https://projecttorreypines.github.io/SynthDiag.jl/stable). For documentation on under development branch, see [dev online documentation](https://projecttorreypines.github.io/SynthDiag.jl/dev).
+For installation and usage instructions, see the [online documentation](https://projecttorreypines.github.io/SD4SOLPS.jl/stable). For documentation on under development branch, see [dev online documentation](https://projecttorreypines.github.io/SD4SOLPS.jl/dev).
 
 ## Examples
 
