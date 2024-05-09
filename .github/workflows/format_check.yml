@@ -8,6 +8,9 @@ on:
       - '*.jl'
   pull_request:
     branches: ["master", "dev"]
+    paths:
+      - '.github/workflows/format_check.yml'
+      - '*.jl'
 jobs:
   check:
     runs-on: ${{ matrix.os }}

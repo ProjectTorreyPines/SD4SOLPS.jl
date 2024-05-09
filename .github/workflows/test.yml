@@ -9,6 +9,10 @@ on:
       - 'test/'
   pull_request:
     branches: ["master", "dev"]
+    paths:
+      - '.github/workflows/test.yml'
+      - 'src/'
+      - 'test/'
 jobs:
   test:
     runs-on: ${{ matrix.os }}

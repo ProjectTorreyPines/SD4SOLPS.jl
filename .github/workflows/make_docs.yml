@@ -2,6 +2,10 @@ name: Make Docs
 on:
   pull_request:
     branches: ["master", "dev"]
+    paths:
+      - '.github/workflows/make_docs.yml'
+      - 'src/'
+      - 'docs/**'
   push:
     branches:
       - master
