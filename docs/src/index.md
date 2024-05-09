@@ -40,7 +40,6 @@ Deletes Manifest.toml so that environment can be recreated, to update or change 
 
 ### Using Julia REPL and installing using Github url
 
-Or, in julia REPL:
 ```julia
 julia> using Pkg;
 julia> Pkg.add(; url="https://github.com/ProjectTorreyPines/IMASDD.jl.git");
@@ -50,6 +49,8 @@ julia> Pkg.add(; url="https://github.com/JuliaFusion/EFIT.jl.git");
 julia> Pkg.add(; url="https://github.com/ProjectTorreyPines/SD4SOLPS.jl.git");
 julia> Pkg.instantiate()
 ```
+
+You might have to use ssh url instead of https. In that case, replace `https://github.com` with `git@github.com:`.
 
 ## Top file handling functions
 
