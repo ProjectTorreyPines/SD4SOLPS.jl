@@ -325,7 +325,7 @@ function prep_flux_map(dd::IMASDD.dd; eq_time_idx::Int64=1, eq_profiles_2d_idx::
     psia = eqt.global_quantities.psi_axis
     psib = eqt.global_quantities.psi_boundary
     psin_eq = (psi .- psia) ./ (psib - psia)
-    rzpi = Interpolations.LinearInterpolation((r_eq, z_eq), psin_eq)
+    rzpi = Interpolations.linear_interpolation((r_eq, z_eq), psin_eq)
     return r_eq, z_eq, psin_eq, rzpi
 end
 
@@ -586,7 +586,7 @@ function mesh_ext_follow_grad(
     end
 
     if rzpi === nothing
-        rzpi = Interpolations.LinearInterpolation((r_eq, z_eq), psin_eq)
+        rzpi = Interpolations.linear_interpolation((r_eq, z_eq), psin_eq)
     end
 
     # Step along the paths of steepest descent to populate the mesh.

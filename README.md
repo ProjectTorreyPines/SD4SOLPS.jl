@@ -1,4 +1,9 @@
 # SD4SOLPS
+
+![Format Check](https://github.com/ProjectTorreyPines/SD4SOLPS.jl/actions/workflows/format_check.yml/badge.svg)
+![Docs](https://github.com/ProjectTorreyPines/SD4SOLPS.jl/actions/workflows/make_docs.yml/badge.svg)
+![Tests](https://github.com/ProjectTorreyPines/SD4SOLPS.jl/actions/workflows/test.yml/badge.svg)
+
 Synthetic diagnostic workflow manager for use with SOLPS models
 
 This repository is the top level layer for managing a workflow for calculating
@@ -10,8 +15,13 @@ Steps:
 3) Make assumptions to extend profiles into the core and far SOL, if needed
 4) Run synthetic diagnostic models and record output
 
+For installation and usage instructions, see the [online documentation](https://projecttorreypines.github.io/SynthDiag.jl/stable). For documentation on under development branch, see [dev online documentation](https://projecttorreypines.github.io/SynthDiag.jl/dev).
 
-## Building julia environment for SD4SOLPS
+## Examples
+
+Refer to the instructions on this [wiki page](https://github.com/ProjectTorreyPines/SD4SOLPS.jl/wiki/Demo) to see how to run `examples/demo.ipynb`.
+
+## Building julia environment for SD4SOLPS for development
 
 ### Cloning using ssh
 
@@ -83,10 +93,6 @@ make Clean: Deletes Project.toml, Manifest.toml, and any cloned repositories for
 
 Further options are same as above except for the difference that in case of cloning local copies of repos, they will be kept on same level as where you cloned SD4SOLPS.jl repo.
 
-### Manual Install
+### Manual Install for development
 
 Refer to the instructions on this [wiki page](https://github.com/ProjectTorreyPines/SD4SOLPS.jl/wiki).
-
-## Use
-
-Refer to the instructions on this [wiki page](https://github.com/ProjectTorreyPines/SD4SOLPS.jl/wiki/Demo).

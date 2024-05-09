@@ -94,12 +94,11 @@ function define_default_sample_set()
         splitdir(pathof(SD4SOLPS))[1] * "/../sample/ITER_Lore_2296_00000/baserun"
     sample_path3 =
         splitdir(pathof(SD4SOLPS))[1] * "/../sample/ITER_Lore_2296_00000/run_restart"
-    sample_path4 = splitdir(pathof(SOLPS2IMAS))[1] * "/../samples"
 
     # Requires dvc pull before the full samples will be loaded
     # Sorry, the minimal samples are too minimal for this one.
     file_list = SD4SOLPS.find_files_in_allowed_folders(
-        sample_path, sample_path2, sample_path3, sample_path4;
+        sample_path, sample_path2, sample_path3;
         eqdsk_file="thereisntoneyet",
     )
     b2fgmtry, b2time, b2mn, eqdsk = file_list
@@ -257,10 +256,7 @@ end
 if args["heavy_utilities"]
     @testset "heavy_utilities" begin
         # Test for finding files in allowed folders
-        sample_path = splitdir(pathof(SOLPS2IMAS))[1] * "/../samples"
-        file_list = SD4SOLPS.find_files_in_allowed_folders(
-            sample_path; eqdsk_file="thereisntoneyet",
-        )
+        file_list = define_default_sample_set()
         @test length(file_list) == 4
         b2fgmtry, b2time, b2mn, eqdsk = file_list
         @test length(b2fgmtry) > 10
@@ -426,7 +422,6 @@ if args["preparation"]
         eqdsk_file = "geqdsk_iter_small_sample"
         sample_paths = [
             splitdir(pathof(SD4SOLPS))[1] * "/../sample",
-            splitdir(pathof(SOLPS2IMAS))[1] * "/../samples",
         ]
         core_method = "simple"
         edge_method = "simple"
