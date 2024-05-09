@@ -1,7 +1,7 @@
 name = "SD4SOLPS"
 uuid = "d8db6f1b-e564-4c04-bba3-ef399f78c070"
 authors = ["David Eldon <eldond@fusion.gat.com>"]
-version = "0.2.0"
+version = "1.0.0"
 
 [deps]
 ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
