@@ -1,9 +1,7 @@
-# Actuator models to translate commands (probably in V) into gas flows
-
-using PhysicalConstants.CODATA2018
+using PhysicalConstants.CODATA2018: BoltzmannConstant, ElementaryCharge
 using Unitful: Unitful
-using Interpolations: Interpolations
-using YAML: YAML
+
+export gas_unit_converter
 
 torrl_per_pam3 = Float64(
     Unitful.upreferred((1 * Unitful.Torr * Unitful.L) / (Unitful.Pa * Unitful.m^3)),
@@ -28,7 +26,13 @@ electrons_per_molecule = Dict(
 )
 
 """
-gas_unit_converter()
+    gas_unit_converter(
+        value_in::Float64,
+        units_in::String,
+        units_out::String;
+        species::String="H",
+        temperature::Float64=293.15,
+    )
 
 Converts gas flows between different units. Uses ideal gas law to convert between
 Pressure * volume type flows / quantities and count / current types of units.
@@ -36,8 +40,11 @@ There is a version that accepts floats in and outputs floats, and another that
 deals in Unitful quantities.
 """
 function gas_unit_converter(
-    value_in::Float64, units_in::String, units_out::String; species::String="H",
-    temperature=293.15,
+    value_in::Float64,
+    units_in::String,
+    units_out::String;
+    species::String="H",
+    temperature::Float64=293.15,
 )
     if units_in == units_out
         return value_in
@@ -76,26 +83,38 @@ function gas_unit_converter(
 end
 
 """
-gas_unit_converter()
+    gas_unit_converter(
+        value_in::Unitful.Quantity,
+        units_in::String,
+        units_out::String;
+        species::String="H",
+        temperature=293.15 * Unitful.K,
+    )
 
 Converts gas flows between different units. Uses ideal gas law to convert between
 Pressure * volume type flows / quantities and count / current types of units.
 This is the Unitful version.
+
 Output will be unitful, but the units are not simplified automatically. You can
 perform operations such as
-(output |> Unitful.upreferred).val
-Unitful.uconvert(Unitful.whatever, output).val
+
+  - `(output |> Unitful.upreferred).val`
+  - `Unitful.uconvert(Unitful.whatever, output).val`
+
 to handle simplification or conversion of units.
 
-Although this function pretends torr L s^-1 and Pa m^3 s^-1 are different, use of
-Unitful should cause them to behave the same way as long as you simplify or convert
-units at the end. This means that you can use other pressure*volume type gas units
-and call them torr L s^-1 and the script will deal with them up to having messy
-units in the output.
+Although this function pretends torr L s``^{-1}`` and Pa m``^3`` s``^{-1}`` are
+different, use of Unitful should cause them to behave the same way as long as you
+simplify or convert units at the end. This means that you can use other pressure*volume
+type gas units and call them torr L s``^{-1}`` and the script will deal with them up to
+having messy units in the output.
 """
 function gas_unit_converter(
-    value_in::Unitful.Quantity, units_in::String, units_out::String;
-    species::String="H", temperature=293.15 * Unitful.K,
+    value_in::Unitful.Quantity,
+    units_in::String,
+    units_out::String;
+    species::String="H",
+    temperature=293.15 * Unitful.K,
 )
     if units_in == units_out
         return value_in
@@ -143,80 +162,4 @@ function gas_unit_converter(
         throw(ArgumentError("Unrecognized units: " * units_in * " or " * units_out))
     end
     return value_in .* conversion_factor
-end
-
-function select_default_config(model::String)
-    froot = model
-    if model == "instant"
-        froot = "simple"
-    end
-    filename = froot * "_gas_valve.yml"
-    return filename
-end
-
-"""
-    model_gas_valve()
-
-The main function for handling a gas valve model. Has logic for selecting models
-and configurations.
-"""
-function model_gas_valve(
-    model::String; configuration_file::String="auto", species::String="D2",
-)
-    # Select configuration file
-    if configuration_file == "auto"
-        configuration_file = select_default_config(model)
-    end
-    default_config_path = "$(@__DIR__)/../config/"
-    if !occursin("/", configuration_file)
-        configuration_file = default_config_path * configuration_file
-    end
-    if !isfile(configuration_file)
-        throw(ArgumentError("Configuration file not found: " * configuration_file))
-    end
-    config = YAML.load_file(configuration_file)
-    if (species in ["H", "H2", "D", "T", "T2"]) & !(species in keys(config))
-        config = config["D2"]  # They should all be the same
-    elseif (species in ["CH"]) & !(species in keys(config))
-        config = config["CD"]
-    elseif (species in ["CH4", "CD4"]) & !(species in keys(config))
-        config = config["CD4"]
-    else
-        config = config[species]
-    end
-
-    if model == "simple"
-        function simple_gas_model(t, command)
-            flow0 = instant_gas_model(command, config)
-            t_ext = copy(t)
-            prepend!(t_ext, minimum(t) - config["delay"])
-            flow0_ext = copy(flow0)
-            prepend!(flow0_ext, flow0[1])
-            interp = Interpolations.linear_interpolation(t_ext, flow0_ext)
-            delayed_flow = interp.(t .- config["delay"])
-            return lowpass_filter(t, delayed_flow, config["tau"])
-        end
-        return simple_gas_model
-    elseif model == "instant"
-        instant_gas_model_(t, command) = instant_gas_model(command, config)
-        return instant_gas_model_
-    else
-        throw(ArgumentError("Unrecognized model: " * model))
-    end
-end
-
-function instant_gas_model(command, config)
-    return config["p1"] .* (sqrt.(((command * config["p2"]) .^ 2.0 .+ 1) .- 1))
-end
-
-function lowpass_filter_(raw, previous_smooth, dt, tau)
-    return previous_smooth + dt / (dt + tau) * (raw - previous_smooth)
-end
-
-function lowpass_filter(t, x, tau)
-    xs = zeros(length(t))
-    for i ∈ 2:length(t)
-        xs[i] = lowpass_filter_(x[i], xs[i-1], t[i] - t[i-1], tau)
-    end
-    return xs
 end

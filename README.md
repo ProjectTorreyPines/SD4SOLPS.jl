@@ -1,4 +1,9 @@
 # SD4SOLPS
+
+![Format Check](https://github.com/ProjectTorreyPines/SD4SOLPS.jl/actions/workflows/format_check.yml/badge.svg)
+![Docs](https://github.com/ProjectTorreyPines/SD4SOLPS.jl/actions/workflows/make_docs.yml/badge.svg)
+![Tests](https://github.com/ProjectTorreyPines/SD4SOLPS.jl/actions/workflows/test.yml/badge.svg)
+
 Synthetic diagnostic workflow manager for use with SOLPS models
 
 This repository is the top level layer for managing a workflow for calculating
@@ -10,10 +15,44 @@ Steps:
 3) Make assumptions to extend profiles into the core and far SOL, if needed
 4) Run synthetic diagnostic models and record output
 
+For installation and usage instructions, see the [online documentation](https://projecttorreypines.github.io/SD4SOLPS.jl/stable). For documentation on under development branch, see [dev online documentation](https://projecttorreypines.github.io/SD4SOLPS.jl/dev).
 
-## Installation
+## Examples
+
+Refer to the instructions on this [wiki page](https://github.com/ProjectTorreyPines/SD4SOLPS.jl/wiki/Demo) to see how to run `examples/demo.ipynb`.
+
+## Building julia environment for SD4SOLPS for development
+
+### Cloning using ssh
+
+It is recommended to setup github access for your account using a ssh key. Please follow
+github intstructions for [connecting to github with ssh](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account).  The make file below and other steps uses ssh clone url and would
+fail unless you have access to github setup using ssh key. If you prefer to use password for login, correct clone urls accordingly.
+
+After cloning this repo, check the make menu:
+```
+SD4SOLPS.jl % make help
+Help Menu
+
+make env_with_cloned_repo (or make r): Creates a Julia environment with the cloned repositories
+make env_with_git_url (or make u): Creates a Julia environment with the git urls without creating local clones
+make clean: Deletes Project.toml and Manifest.toml for a fresh start
+```
+
+### make r
+This option creates local copies of required private repositories at the same level as current repository and uses them in develop mode to create a Manifest.toml
+
+### make u
+This option uses url of required private repositories to create a static Manifest.toml attached to current master branches of these repositories.
+
+### make clean
+Deletes Manifest.toml so that environment can be recreated, to update or change the last used method.
+
+## Example environment with all repositories
 
 ### Using make file
+
+This option only works on and has been tested on macOS and unix. If you have windows, please use the [manual instructions](https://github.com/ProjectTorreyPines/SD4SOLPS.jl/wiki) instead.
 
 #### Option 1: Download the [example directory](https://github.com/ProjectTorreyPines/SD4SOLPS.jl/tree/master/example) in this repo:
 
@@ -54,10 +93,6 @@ make Clean: Deletes Project.toml, Manifest.toml, and any cloned repositories for
 
 Further options are same as above except for the difference that in case of cloning local copies of repos, they will be kept on same level as where you cloned SD4SOLPS.jl repo.
 
-### Manual Install
+### Manual Install for development
 
 Refer to the instructions on this [wiki page](https://github.com/ProjectTorreyPines/SD4SOLPS.jl/wiki).
-
-## Use
-
-Refer to the instructions on this [wiki page](https://github.com/ProjectTorreyPines/SD4SOLPS.jl/wiki/Demo).
