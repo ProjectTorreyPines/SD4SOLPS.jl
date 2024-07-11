@@ -96,7 +96,7 @@ function geqdsk_to_imas!(
     eqt = eq.time_slice[time_index]
     eqt.time = g.time
 
-    source_for_summary = "gEQDSK file $gfilename loaded during SD4SOLPS workflow"
+    source_for_summary = "gEQDSK file $gfilename loaded during SD4SOLPS workflow."
 
     # 0D
     gq = eqt.global_quantities
@@ -119,9 +119,7 @@ function geqdsk_to_imas!(
     dd.summary.global_quantities.ip.value = ip
     dd.summary.global_quantities.r0.value = g.rcentr
     dd.summary.global_quantities.b0.value = b0
-    dd.summary.global_quantities.r0.source = source_for_summary
-    dd.summary.global_quantities.b0.source = source_for_summary
-    dd.summary.global_quantities.ip.source = source_for_summary
+    summarize = ["ip", "r0", "b0"]
 
     # 1D
     p1 = eqt.profiles_1d
@@ -159,7 +157,7 @@ function geqdsk_to_imas!(
 
     dd.summary.global_quantities.q_95.value = Array{Float64}(undef, time_index)
     dd.summary.global_quantities.q_95.value[time_index] = gq.q_95
-    dd.summary.global_quantities.q_95.source = source_for_summary
+    summarize = [summarize; "q_95"]
 
     # X-points
     xrs, xzs, xpsins, xseps = EFIT.x_points(g; within_limiter_only=false)
@@ -207,6 +205,11 @@ function geqdsk_to_imas!(
     resize!(limiter.unit, 1)
     limiter.unit[1].outline.r = g.rlim
     limiter.unit[1].outline.z = g.zlim
+
+    for s in summarize
+        getproperty(dd.summary.global_quantities, Symbol(s)).source = source_for_summary
+    end
+
     return
 end
 
