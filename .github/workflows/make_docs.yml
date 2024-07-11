@@ -4,7 +4,7 @@ on:
     branches: ["master", "dev"]
     paths:
       - '.github/workflows/make_docs.yml'
-      - 'src/'
+      - 'src/**'
       - 'docs/**'
   push:
     branches:
@@ -13,7 +13,7 @@ on:
       - docs
     paths:
       - '.github/workflows/make_docs.yml'
-      - 'src/'
+      - 'src/**'
       - 'docs/**'
     tags: '*'
   workflow_dispatch:
@@ -25,7 +25,12 @@ jobs:
       contents: write
       statuses: write
     name: Documentation
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        julia-version: [1.x]
+        julia-arch: [x64]
+        os: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@latest
@@ -36,7 +41,7 @@ jobs:
         id: extract_branch
       - name: Install dependencies
         run: |
-          julia --project=docs/ -e 'using Pkg; Pkg.add(; url="https://github.com/ProjectTorreyPines/IMASDD.jl.git"); Pkg.add(; url="https://github.com/ProjectTorreyPines/GGDUtils.jl.git", rev="${{ steps.extract_branch.outputs.branch }}");  Pkg.add(; url="https://github.com/ProjectTorreyPines/SOLPS2IMAS.jl.git", rev="${{ steps.extract_branch.outputs.branch }}"); Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
+          julia --project=docs/ -e 'using Pkg; Pkg.add(; url="https://github.com/ProjectTorreyPines/IMASDD.jl.git"); Pkg.add(; url="https://github.com/ProjectTorreyPines/Fortran90Namelists.jl.git"); Pkg.add(; url="https://github.com/ProjectTorreyPines/GGDUtils.jl.git", rev="${{ steps.extract_branch.outputs.branch }}");  Pkg.add(; url="https://github.com/ProjectTorreyPines/SOLPS2IMAS.jl.git", rev="${{ steps.extract_branch.outputs.branch }}"); Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
       - name: Build and deploy
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
