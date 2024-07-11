@@ -206,7 +206,7 @@ function geqdsk_to_imas!(
     limiter.unit[1].outline.r = g.rlim
     limiter.unit[1].outline.z = g.zlim
 
-    for s in summarize
+    for s ∈ summarize
         getproperty(dd.summary.global_quantities, Symbol(s)).source = source_for_summary
     end
 
