@@ -4,7 +4,7 @@ on:
     branches: ["master", "dev"]
     paths:
       - '.github/workflows/make_docs.yml'
-      - 'src/'
+      - 'src/**'
       - 'docs/**'
   push:
     branches:
@@ -13,7 +13,7 @@ on:
       - docs
     paths:
       - '.github/workflows/make_docs.yml'
-      - 'src/'
+      - 'src/**'
       - 'docs/**'
     tags: '*'
   workflow_dispatch:
@@ -25,7 +25,12 @@ jobs:
       contents: write
       statuses: write
     name: Documentation
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        julia-version: [1.x]
+        julia-arch: [x64]
+        os: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@latest
