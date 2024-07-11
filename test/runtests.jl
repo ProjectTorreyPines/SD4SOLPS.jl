@@ -357,6 +357,10 @@ if args["geqdsk_to_imas"]
             @test gq.magnetic_axis.r > 0
             @test dd.equilibrium.vacuum_toroidal_field.r0 > 0
 
+            # Summary
+            @test dd.equilibrium.time[tslice] == dd.summary.time[tslice]
+            @test dd.summary.global_quantities.r0.value > 0
+
             # 1d
             p1 = eqt.profiles_1d
             nprof = length(p1.psi)

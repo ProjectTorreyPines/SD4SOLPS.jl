@@ -83,6 +83,7 @@ function geqdsk_to_imas!(
 )
     # https://github.com/JuliaFusion/EFIT.jl/blob/master/src/io.jl
     g = EFIT.readg(eqdsk_file; set_time=set_time)
+    gfilename = split(eqdsk_file, "/")[end]
     # Copying ideas from OMFIT: omfit/omfit_classes/omfit_eqdsk.py / to_omas()
     eq = dd.equilibrium
     if IMASDD.ismissing(eq, :time)
@@ -95,6 +96,8 @@ function geqdsk_to_imas!(
     eqt = eq.time_slice[time_index]
     eqt.time = g.time
 
+    source_for_summary = "gEQDSK file $gfilename loaded during SD4SOLPS workflow"
+
     # 0D
     gq = eqt.global_quantities
     gq.magnetic_axis.r = g.rmaxis
@@ -106,6 +109,19 @@ function geqdsk_to_imas!(
     b0 = Array{Float64}(undef, time_index)
     b0[time_index] = g.bcentr
     eq.vacuum_toroidal_field.b0 = b0
+
+    if IMASDD.ismissing(dd.summary, :time)
+        dd.summary.time = Array{Float64}(undef, time_index)
+    end
+    dd.summary.time[time_index] = g.time
+    ip = Array{Float64}(undef, time_index)
+    ip[time_index] = g.current
+    dd.summary.global_quantities.ip.value = ip
+    dd.summary.global_quantities.r0.value = g.rcentr
+    dd.summary.global_quantities.b0.value = b0
+    dd.summary.global_quantities.r0.source = source_for_summary
+    dd.summary.global_quantities.b0.source = source_for_summary
+    dd.summary.global_quantities.ip.source = source_for_summary
 
     # 1D
     p1 = eqt.profiles_1d
@@ -140,6 +156,10 @@ function geqdsk_to_imas!(
     if hasproperty(g, :rhovn)
         gq.q_min.rho_tor_norm = g.rhovn[qmin_idx]
     end
+
+    dd.summary.global_quantities.q_95.value = Array{Float64}(undef, time_index)
+    dd.summary.global_quantities.q_95.value[time_index] = gq.q_95
+    dd.summary.global_quantities.q_95.source = source_for_summary
 
     # X-points
     xrs, xzs, xpsins, xseps = EFIT.x_points(g; within_limiter_only=false)
