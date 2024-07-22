@@ -10,6 +10,8 @@ using ArgParse: ArgParse
 using GGDUtils: GGDUtils, get_grid_subset
 
 function parse_commandline()
+    # Define newARGS = ["--yourflag"] to run only tests on your flags when including runtests.jl
+    localARGS = @isdefined(newARGS) ? newARGS : ARGS  # Thanks https://stackoverflow.com/a/44978474/6605826
     s = ArgParse.ArgParseSettings(; description="Run tests. Default is all tests.")
 
     ArgParse.add_arg_table!(s,
@@ -35,7 +37,7 @@ function parse_commandline()
         Dict(:help => "Test only preparation",
             :action => :store_true),
     )
-    args = ArgParse.parse_args(s)
+    args = ArgParse.parse_args(localARGS, s)
     if !any(values(args)) # If no flags are set, run all tests
         for k ∈ keys(args)
             args[k] = true
@@ -354,6 +356,10 @@ if args["geqdsk_to_imas"]
             gq = eqt.global_quantities
             @test gq.magnetic_axis.r > 0
             @test dd.equilibrium.vacuum_toroidal_field.r0 > 0
+
+            # Summary
+            @test dd.equilibrium.time[tslice] == dd.summary.time[tslice]
+            @test dd.summary.global_quantities.r0.value > 0
 
             # 1d
             p1 = eqt.profiles_1d

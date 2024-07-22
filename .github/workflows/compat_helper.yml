@@ -1,0 +1,13 @@
+name: CompatHelper
+on:
+  schedule:
+    - cron: '37 3 * * *'
+  push:
+    branches: reuse_ci
+    paths:
+      - '.github/workflows/format_check.yml'
+      - 'Project.toml'
+  workflow_dispatch:
+jobs:
+  CompatHelper:
+    uses: ProjectTorreyPines/GitHubActionsWorkflows/.github/workflows/compat_helper.yml@master
