@@ -25,7 +25,7 @@ YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 [compat]
 ArgParse = "1"
 Contour = "0.6.3"
-EFIT = "0.2.0"
+EFIT = "1.0.0"
 Fortran90Namelists = "0.1.1"
 GGDUtils = "1.0.1"
 IMASDD = "0.1"
