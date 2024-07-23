@@ -250,10 +250,29 @@ function preparation(
     add_rho_to_equilibrium!(dd)  # Doesn't do anything if rho is valid
     println("Loaded input data into IMAS DD")
 
-    fill_in_extrapolated_core_profile!(dd, "electrons.density"; method=core_method)
-    fill_in_extrapolated_core_profile!(dd, "electrons.temperature"; method=core_method)
+    core_profiles = ["electrons.density", "electrons.temperature"]
+    extrapolated_core_profiles = []
+    for core_profile ∈ core_profiles
+        tags = split(core_profile, ".")
+        parent = dd.edge_profiles.ggd[1]
+        for tag ∈ tags[1:end-1]
+            parent = getproperty(parent, Symbol(tag))
+        end
+        qty = getproperty(parent, Symbol(tags[end]), core_profile)
+        if length(qty) > 0
+            fill_in_extrapolated_core_profile!(dd, core_profile; method=core_method)
+            append!(extrapolated_core_profiles, [core_profile])
+            println("    Extrapolated $core_profile into the core.")
+        else
+            println(
+                "  > Warning: quantity $core_profile was not usable and was not extrapolated into the core.",
+            )
+        end
+    end
     # ... more profiles here as they become available in b2time
-    println("Extrapolated core profiles")
+    println(
+        "Extrapolated $(length(extrapolated_core_profiles))/$(length(core_profiles)) core profiles.",
+    )
 
     cached_mesh_extension!(dd, eqdsk_file, b2fgmtry)
     fill_in_extrapolated_edge_profile!(dd, "electrons.density"; method=core_method)
