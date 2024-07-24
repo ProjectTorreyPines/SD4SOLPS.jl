@@ -106,10 +106,10 @@ end
         dd::IMASDD.dd,
         quantity_name::String;
         method::String="simple",
-        eq_time_idx::Int64=1,
-        eq_profiles_2d_idx::Int64=1,
-        grid_ggd_idx::Int64=1,
-        space_idx::Int64=1,
+        eq_time_idx::Int=1,
+        eq_profiles_2d_idx::Int=1,
+        grid_ggd_idx::Int=1,
+        space_idx::Int=1,
     )
 
 This function accepts a DD that should be populated with `equilibrium` and
@@ -146,11 +146,11 @@ function fill_in_extrapolated_core_profile!(
     dd::IMASDD.dd,
     quantity_name::String;
     method::String="simple",
-    eq_time_idx::Int64=1,
-    eq_profiles_2d_idx::Int64=1,
-    grid_ggd_idx::Int64=1,
-    space_idx::Int64=1,
-    cell_subset_idx::Int64=5,
+    eq_time_idx::Int=1,
+    eq_profiles_2d_idx::Int=1,
+    grid_ggd_idx::Int=1,
+    space_idx::Int=1,
+    cell_subset_idx::Int=5,
 )
     check_rho_1d(dd; time_slice=eq_time_idx, throw_on_fail=true)
     grid_ggd = dd.edge_profiles.grid_ggd[grid_ggd_idx]
@@ -305,7 +305,7 @@ function extrapolate_edge_exp(
 end
 
 """
-    prep_flux_map(dd::IMASDD.dd; eq_time_idx::Int64=1, eq_profiles_2d_idx::Int64=1)
+    prep_flux_map(dd::IMASDD.dd; eq_time_idx::Int=1, eq_profiles_2d_idx::Int=1)
 
 Reads equilibrium data and extracts/derives some useful quantities.
 This is very basic, but it was being repeated and that's a no-no.
@@ -316,7 +316,7 @@ Returns:
   - normalized poloidal flux on the equilibrium grid
   - a linear interpolation of norm pol flux vs. R and Z, ready to be evaluated
 """
-function prep_flux_map(dd::IMASDD.dd; eq_time_idx::Int64=1, eq_profiles_2d_idx::Int64=1)
+function prep_flux_map(dd::IMASDD.dd; eq_time_idx::Int=1, eq_profiles_2d_idx::Int=1)
     eqt = dd.equilibrium.time_slice[eq_time_idx]
     p2 = eqt.profiles_2d[eq_profiles_2d_idx]
     r_eq = p2.grid.dim1
@@ -332,10 +332,10 @@ end
 """
     mesh_psi_spacing(
         dd::IMASDD.dd;
-        eq_time_idx::Int64=1,
-        eq_profiles_2d_idx::Int64=1,
-        grid_ggd_idx::Int64=1,
-        space_idx::Int64=1,
+        eq_time_idx::Int=1,
+        eq_profiles_2d_idx::Int=1,
+        grid_ggd_idx::Int=1,
+        space_idx::Int=1,
         avoid_guard_cell::Bool=true,
         spacing_rule="mean",
     )
@@ -365,10 +365,10 @@ Input Arguments:
 """
 function mesh_psi_spacing(
     dd::IMASDD.dd;
-    eq_time_idx::Int64=1,
-    eq_profiles_2d_idx::Int64=1,
-    grid_ggd_idx::Int64=1,
-    space_idx::Int64=1,
+    eq_time_idx::Int=1,
+    eq_profiles_2d_idx::Int=1,
+    grid_ggd_idx::Int=1,
+    space_idx::Int=1,
     avoid_guard_cell::Bool=true,
     spacing_rule="mean",
 )
@@ -428,10 +428,10 @@ end
 """
     pick_extension_psi_range(
         dd::IMASDD.dd;
-        eq_time_idx::Int64=1,
-        eq_profiles_2d_idx::Int64=1,
-        grid_ggd_idx::Int64=1,
-        space_idx::Int64=1,
+        eq_time_idx::Int=1,
+        eq_profiles_2d_idx::Int=1,
+        grid_ggd_idx::Int=1,
+        space_idx::Int=1,
     )::Vector{Float64}
 
 Defines the `psi_N` levels for an extended mesh. The range of `psi_N` levels starts
@@ -441,10 +441,10 @@ Returns a vector of `psi_N` levels.
 """
 function pick_extension_psi_range(
     dd::IMASDD.dd;
-    eq_time_idx::Int64=1,
-    eq_profiles_2d_idx::Int64=1,
-    grid_ggd_idx::Int64=1,
-    space_idx::Int64=1,
+    eq_time_idx::Int=1,
+    eq_profiles_2d_idx::Int=1,
+    grid_ggd_idx::Int=1,
+    space_idx::Int=1,
 )::Vector{Float64}
     r_eq, z_eq, psin_eq, rzpi = prep_flux_map(dd; eq_time_idx, eq_profiles_2d_idx)
 
@@ -475,7 +475,7 @@ function pick_extension_psi_range(
     )
     lvlstart = maximum(psin_midplane * sign(dpsin)) / sign(dpsin) + dpsin
     lvlend = maximum(wall_psin * sign(dpsin)) / sign(dpsin) + dpsin
-    nlvl = Int64(ceil((lvlend - lvlstart) / dpsin))
+    nlvl = Int(ceil((lvlend - lvlstart) / dpsin))
     psin_levels = collect(LinRange(lvlstart, lvlend, nlvl))
     # eqt = dd.equilibrium.time_slice[eq_time_idx]
     # if hasproperty(eqt.boundary_secondary_separatrix, :psi)
@@ -541,7 +541,7 @@ end
         psin_eq::Matrix,
         rstart::Vector{Float64},
         zstart::Vector{Float64},
-        nlvl::Int64,
+        nlvl::Int,
         dpsin::Float64,
         rzpi=nothing,
     )::Tuple{Matrix{Float64}, Matrix{Float64}}
@@ -573,7 +573,7 @@ function mesh_ext_follow_grad(
     psin_eq::Matrix,
     rstart::Vector{Float64},
     zstart::Vector{Float64},
-    nlvl::Int64,
+    nlvl::Int,
     dpsin::Float64,
     rzpi=nothing,
 )::Tuple{Matrix{Float64}, Matrix{Float64}}
@@ -727,7 +727,7 @@ end
         space::IMASDD.edge_profiles__grid_ggd___space,
         mesh_r::Matrix{Float64},
         mesh_z::Matrix{Float64},
-        cut::Int64,
+        cut::Int,
     )
 
 Records arrays of mesh data from regular 2D arrays into the DD
@@ -746,7 +746,7 @@ function record_regular_mesh!(
     space::IMASDD.edge_profiles__grid_ggd___space,
     mesh_r::Matrix{Float64},
     mesh_z::Matrix{Float64},
-    cut::Int64,
+    cut::Int,
 )
     npol, nlvl = size(mesh_r)
     o0 = space.objects_per_dimension[1]  # Nodes
@@ -902,10 +902,10 @@ end
         dd::IMASDD.dd,
         eqdsk_file::String,
         b2fgmtry::String;
-        eq_time_idx::Int64=1,
-        eq_profiles_2d_idx::Int64=1,
-        grid_ggd_idx::Int64=1,
-        space_idx::Int64=1,
+        eq_time_idx::Int=1,
+        eq_profiles_2d_idx::Int=1,
+        grid_ggd_idx::Int=1,
+        space_idx::Int=1,
         clear_cache::Bool=false,
     )::String
 
@@ -929,10 +929,10 @@ function cached_mesh_extension!(
     dd::IMASDD.dd,
     eqdsk_file::String,
     b2fgmtry::String;
-    eq_time_idx::Int64=1,
-    eq_profiles_2d_idx::Int64=1,
-    grid_ggd_idx::Int64=1,
-    space_idx::Int64=1,
+    eq_time_idx::Int=1,
+    eq_profiles_2d_idx::Int=1,
+    grid_ggd_idx::Int=1,
+    space_idx::Int=1,
     clear_cache::Bool=false,
 )::String
     path = "$(@__DIR__)/../data/"
@@ -992,20 +992,20 @@ end
 """
     mesh_extension_sol!(
         dd::IMASDD.dd;
-        eq_time_idx::Int64=1,
-        eq_profiles_2d_idx::Int64=1,
-        grid_ggd_idx::Int64=1,
-        space_idx::Int64=1,
+        eq_time_idx::Int=1,
+        eq_profiles_2d_idx::Int=1,
+        grid_ggd_idx::Int=1,
+        space_idx::Int=1,
     )
 
 Extends the mesh out into the SOL
 """
 function mesh_extension_sol!(
     dd::IMASDD.dd;
-    eq_time_idx::Int64=1,
-    eq_profiles_2d_idx::Int64=1,
-    grid_ggd_idx::Int64=1,
-    space_idx::Int64=1,
+    eq_time_idx::Int=1,
+    eq_profiles_2d_idx::Int=1,
+    grid_ggd_idx::Int=1,
+    space_idx::Int=1,
 )
     grid_ggd = dd.edge_profiles.grid_ggd[grid_ggd_idx]
     space = grid_ggd.space[space_idx]
@@ -1051,7 +1051,7 @@ end
         dd::IMASDD.dd,
         quantity_name::String;
         method::String="simple",
-        eq_time_idx::Int64=1,
+        eq_time_idx::Int=1,
     )
 
 JUST A PLACEHOLDER FOR NOW. DOESN'T ACTUALLY WORK YET.
@@ -1060,7 +1060,7 @@ function fill_in_extrapolated_edge_profile!(
     dd::IMASDD.dd,
     quantity_name::String;
     method::String="simple",
-    eq_time_idx::Int64=1,
+    eq_time_idx::Int=1,
 )
     # Inspect input
     if length(dd.equilibrium.time_slice) < eq_time_idx
