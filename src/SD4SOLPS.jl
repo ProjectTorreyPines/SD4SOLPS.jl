@@ -221,7 +221,7 @@ end
         filename::String="sd_input_data",
         output_format::String="json",
         eqdsk_set_time::Union{Nothing, Float64}=nothing,
-        eq_time_index::Int64=1,
+        eq_time_index::Int=1,
     )::IMASDD.dd
 
 Gathers SOLPS and EFIT files and loads them into IMAS structure. Extrapolates
@@ -234,7 +234,7 @@ function preparation(
     filename::String="sd_input_data",
     output_format::String="json",
     eqdsk_set_time::Union{Nothing, Float64}=nothing,
-    eq_time_index::Int64=1,
+    eq_time_index::Int=1,
 )::IMASDD.dd
     b2fgmtry, b2time, b2mn, eqdsk =
         find_files_in_allowed_folders(dirs...; eqdsk_file=eqdsk_file)
