@@ -448,5 +448,7 @@ if args["preparation"]
         @test size(psirz) == (length(r), length(z))
         println(out_file)
         @test isfile(out_file)
+        println("imas2json timing: ")
+        @time IMASDD.imas2json(dd, filename * ".json", strict=true, freeze=false)
     end
 end
