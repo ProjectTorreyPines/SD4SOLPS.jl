@@ -141,7 +141,13 @@ function geqdsk_to_imas!(
     p2 = eqt.profiles_2d[1]
     p2.grid.dim1 = collect(g.r)
     p2.grid.dim2 = collect(g.z)
-    p2.psi = g.psirz  # Not sure if transpose is correct
+    p2.psi = g.psirz  # Not sure if transpose is correct (I have been getting away with this for some time and suspect it's okay)
+    p2.grid_type.index = 1  # 1 = rectangular, such as dim1 = R, dim2 = Z
+    p2.grid_type.name = "R-Z grid for flux map"
+    p2.grid_type.description = (
+        "A recntangular grid of points in R,Z on which poloidal " *
+        "magnetic flux psi is defined. The grid's dim1 is R, dim2 is Z."
+    )
     # missing j_tor = pcurrt
 
     # Derived
