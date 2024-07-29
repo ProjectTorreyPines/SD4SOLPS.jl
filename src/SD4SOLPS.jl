@@ -1,6 +1,6 @@
 module SD4SOLPS
 
-using IMAS: IMASDD
+using IMAS: IMAS
 using SOLPS2IMAS: SOLPS2IMAS
 using EFIT: EFIT
 using Interpolations: Interpolations
@@ -67,7 +67,7 @@ end
 """
     geqdsk_to_imas!(
         eqdsk_file::String,
-        dd::IMASDD.dd;
+        dd::IMAS.dd;
         set_time::Union{Nothing, Float64}=nothing,
         time_index::Int=1,
     )
@@ -77,7 +77,7 @@ the IMAS DD structure.
 """
 function geqdsk_to_imas!(
     eqdsk_file::String,
-    dd::IMASDD.dd;
+    dd::IMAS.dd;
     set_time::Union{Nothing, Float64}=nothing,
     time_index::Int=1,
 )
@@ -86,7 +86,7 @@ function geqdsk_to_imas!(
     gfilename = split(eqdsk_file, "/")[end]
     # Copying ideas from OMFIT: omfit/omfit_classes/omfit_eqdsk.py / to_omas()
     eq = dd.equilibrium
-    if IMASDD.ismissing(eq, :time)
+    if IMAS.ismissing(eq, :time)
         eq.time = Array{Float64}(undef, time_index)
     end
     eq.time[time_index] = g.time
@@ -110,7 +110,7 @@ function geqdsk_to_imas!(
     b0[time_index] = g.bcentr
     eq.vacuum_toroidal_field.b0 = b0
 
-    if IMASDD.ismissing(dd.summary, :time)
+    if IMAS.ismissing(dd.summary, :time)
         dd.summary.time = Array{Float64}(undef, time_index)
     end
     dd.summary.time[time_index] = g.time
@@ -228,7 +228,7 @@ end
         output_format::String="json",
         eqdsk_set_time::Union{Nothing, Float64}=nothing,
         eq_time_index::Int=1,
-    )::IMASDD.dd
+    )::IMAS.dd
 
 Gathers SOLPS and EFIT files and loads them into IMAS structure. Extrapolates
 profiles as needed to get a complete picture.
@@ -241,7 +241,7 @@ function preparation(
     output_format::String="json",
     eqdsk_set_time::Union{Nothing, Float64}=nothing,
     eq_time_index::Int=1,
-)::IMASDD.dd
+)::IMAS.dd
     b2fgmtry, b2time, b2mn, eqdsk =
         find_files_in_allowed_folders(dirs...; eqdsk_file=eqdsk_file)
     println("Found source files:")
@@ -288,7 +288,7 @@ function preparation(
     print("Exporting to file: ")
     if output_format == "json"
         println(filename * ".json")
-        IMASDD.imas2json(dd, filename * ".json"; strict=true, freeze=false)
+        IMAS.imas2json(dd, filename * ".json"; strict=true, freeze=false)
     else
         throw(ArgumentError(string("Unrecognized output format: ", output_format)))
     end
