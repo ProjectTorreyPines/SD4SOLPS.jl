@@ -11,7 +11,7 @@ using GGDUtils: GGDUtils, get_grid_subset
 
 function parse_commandline()
     # Define newARGS = ["--yourflag"] to run only tests on your flags when including runtests.jl
-    localARGS = @isdefined(newARGS) ? newARGS : ARGS  # Thanks https://stackoverflow.com/a/44978474/6605826
+    localARGS = (@isdefined(newARGS) && newARGS !== nothing) ? newARGS : ARGS  # Thanks https://stackoverflow.com/a/44978474/6605826
     s = ArgParse.ArgParseSettings(; description="Run tests. Default is all tests.")
 
     ArgParse.add_arg_table!(s,
