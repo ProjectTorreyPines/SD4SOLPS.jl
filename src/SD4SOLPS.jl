@@ -288,7 +288,7 @@ function preparation(
     print("Exporting to file: ")
     if output_format == "json"
         println(filename * ".json")
-        IMASDD.imas2json(dd, filename * ".json", strict=true, freeze=false)
+        IMASDD.imas2json(dd, filename * ".json"; strict=true, freeze=false)
     else
         throw(ArgumentError(string("Unrecognized output format: ", output_format)))
     end
