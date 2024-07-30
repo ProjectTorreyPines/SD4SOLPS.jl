@@ -81,6 +81,7 @@ function geqdsk_to_imas!(
     dd::IMAS.dd;
     set_time::Union{Nothing, Float64}=nothing,
     time_index::Int=1,
+    allow_boundary_flux_correction::Bool=true,
 )
     # https://github.com/JuliaFusion/EFIT.jl/blob/master/src/io.jl
     g = EFIT.readg(eqdsk_file; set_time=set_time)
@@ -122,10 +123,43 @@ function geqdsk_to_imas!(
     dd.summary.global_quantities.b0.value = b0
     summarize = ["ip", "r0", "b0"]
 
+    # 2D
+    resize!(eqt.profiles_2d, 1)
+    p2 = eqt.profiles_2d[1]
+    p2.grid.dim1 = collect(g.r)
+    p2.grid.dim2 = collect(g.z)
+    p2.psi = g.psirz  # Not sure if transpose is correct (I have been getting away with this for some time and suspect it's okay)
+    p2.grid_type.index = 1  # 1 = rectangular, such as dim1 = R, dim2 = Z
+    p2.grid_type.name = "R-Z grid for flux map"
+    p2.grid_type.description = (
+        "A recntangular grid of points in R,Z on which poloidal " *
+        "magnetic flux psi is defined. The grid's dim1 is R, dim2 is Z."
+    )
+    # missing j_tor = pcurrt
+
+    if allow_boundary_flux_correction
+        # Check / correct simag. Intended for the case where simag is quoted imprecisely and the contour doesn't close
+        level = gq.psi_boundary + 0
+        paths, level = IMAS.flux_surface(eqt, level, :closed)
+        count = 0  # prevents inf loop if something goes wrong
+        while (length(paths) >= 1) && (count < 50)  # push boundary flux out until there is no closed boundary
+            level += (gq.psi_boundary - gq.psi_axis) * 0.001
+            paths, level = IMAS.flux_surface(eqt, level, :closed)
+            count += 1
+        end
+        println(" --- ")
+        while (length(paths) < 1) && (count < 200)  # pull boundary flux back in until there is a closed boundary
+            level -= (gq.psi_boundary - gq.psi_axis) * 0.0001
+            paths, level = IMAS.flux_surface(eqt, level, :closed)
+            count += 1
+        end
+        gq.psi_boundary = level
+    end
+
     # 1D
     p1 = eqt.profiles_1d
     nprof = length(g.pres)
-    psi = collect(LinRange(g.simag, g.sibry, nprof))
+    psi = collect(LinRange(gq.psi_axis, gq.psi_boundary, nprof))
     p1.psi = psi
     p1.f = g.fpol
     p1.pressure = g.pres
@@ -148,12 +182,12 @@ function geqdsk_to_imas!(
     # Interpolate R against psi to find where each flux surface intersects midplane.
     outer = g.r .>= g.rmaxis
     inner = g.r .<= g.rmaxis
-    psi_omp = [g.simag; psi_midplane[outer]]
+    psi_omp = [gq.psi_axis; psi_midplane[outer]]
     r_omp = [g.rmaxis; g.r[outer]]
     i_omp = sortperm(psi_omp)
     psi_omp = psi_omp[i_omp]
     r_omp = r_omp[i_omp]
-    psi_imp = [psi_midplane[inner]; g.simag]
+    psi_imp = [psi_midplane[inner]; gq.psi_axis]
     r_imp = [g.r[inner]; g.rmaxis]
     i_imp = sortperm(psi_imp)
     psi_imp = psi_imp[i_imp]
@@ -161,22 +195,8 @@ function geqdsk_to_imas!(
     p1.r_outboard = Interpolations.linear_interpolation(psi_omp, r_omp)(psi)
     p1.r_inboard = Interpolations.linear_interpolation(psi_imp, r_imp)(psi)
 
-    # 2D
-    resize!(eqt.profiles_2d, 1)
-    p2 = eqt.profiles_2d[1]
-    p2.grid.dim1 = collect(g.r)
-    p2.grid.dim2 = collect(g.z)
-    p2.psi = g.psirz  # Not sure if transpose is correct (I have been getting away with this for some time and suspect it's okay)
-    p2.grid_type.index = 1  # 1 = rectangular, such as dim1 = R, dim2 = Z
-    p2.grid_type.name = "R-Z grid for flux map"
-    p2.grid_type.description = (
-        "A recntangular grid of points in R,Z on which poloidal " *
-        "magnetic flux psi is defined. The grid's dim1 is R, dim2 is Z."
-    )
-    # missing j_tor = pcurrt
-
     # Derived
-    psin1d = (psi .- g.simag) ./ (g.sibry - g.simag)
+    psin1d = (psi .- gq.psi_axis) ./ (gq.psi_boundary - gq.psi_axis)
     gq.magnetic_axis.b_field_tor = g.bcentr * g.rcentr / g.rmaxis
     gq.q_axis = g.qpsi[1]
     gq.q_95 = Interpolations.linear_interpolation(psin1d, g.qpsi)(0.95)
