@@ -1,6 +1,7 @@
 module SD4SOLPS
 
 using IMAS: IMAS
+using IMASDD: IMASDD
 using SOLPS2IMAS: SOLPS2IMAS
 using EFIT: EFIT
 using Interpolations: Interpolations
@@ -135,6 +136,30 @@ function geqdsk_to_imas!(
         # rhovn is not in the original EFIT.jl but is added on a branch
         p1.rho_tor_norm = g.rhovn
     end
+    # 1D midplane profiles
+    # Find closest row to zmaxis
+    dz = abs.(g.z .- g.zmaxis)
+    i1 = argmin(dz)
+    dz2 = dz[dz.!=dz[i1]]
+    i2 = argmin(abs.(dz .- dz2[argmin(dz2)]))
+    wi2 = (g.z[i1] - g.zmaxis) / (g.z[i1] - g.z[i2])
+    wi1 = (g.zmaxis - g.z[i2]) / (g.z[i1] - g.z[i2])
+    psi_midplane = g.psirz[:, i1] .* wi1 .+ g.psirz[:, i2] .* wi2
+    # Interpolate R against psi to find where each flux surface intersects midplane.
+    outer = g.r .>= g.rmaxis
+    inner = g.r .<= g.rmaxis
+    psi_omp = [g.simag; psi_midplane[outer]]
+    r_omp = [g.rmaxis; g.r[outer]]
+    i_omp = sortperm(psi_omp)
+    psi_omp = psi_omp[i_omp]
+    r_omp = r_omp[i_omp]
+    psi_imp = [psi_midplane[inner]; g.simag]
+    r_imp = [g.r[inner]; g.rmaxis]
+    i_imp = sortperm(psi_imp)
+    psi_imp = psi_imp[i_imp]
+    r_imp = r_imp[i_imp]
+    p1.r_outboard = Interpolations.linear_interpolation(psi_omp, r_omp)(psi)
+    p1.r_inboard = Interpolations.linear_interpolation(psi_imp, r_imp)(psi)
 
     # 2D
     resize!(eqt.profiles_2d, 1)
@@ -250,12 +275,30 @@ function preparation(
     println("    b2mn.dat = ", b2mn)
     println("    eqdsk = ", eqdsk)
 
-    dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time; b2mn=b2mn)
+    dd = IMAS.dd()
     geqdsk_to_imas!(eqdsk, dd; set_time=eqdsk_set_time, time_index=eq_time_index)
     # Repairs
     add_rho_to_equilibrium!(dd)  # Doesn't do anything if rho is valid
+    dd.global_time = dd.equilibrium.time_slice[1].time
+    dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time; b2mn=b2mn, ids=dd)
     println("Loaded input data into IMAS DD")
 
+    # Core profiles
+    # Set timing
+    nt = length(dd.edge_profiles.ggd)
+    if length(dd.core_profiles.profiles_1d) < nt
+        resize!(dd.core_profiles.profiles_1d, nt)
+    end
+    if ismissing(dd.core_profiles, :time)
+        dd.core_profiles.time = Array{Float64}(undef, nt)
+    elseif length(dd.core_profiles.time) < nt
+        resize!(dd.core_profiles.time, nt)
+    end
+    for it ∈ 1:nt
+        dd.core_profiles.time[it] =
+            dd.core_profiles.profiles_1d[it].time = dd.edge_profiles.ggd[it].time
+    end
+    # Extrapolate profiles
     core_profiles = ["electrons.density", "electrons.temperature"]
     extrapolated_core_profiles = []
     for core_profile ∈ core_profiles
