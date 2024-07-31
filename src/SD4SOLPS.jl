@@ -81,7 +81,7 @@ function geqdsk_to_imas!(
     dd::IMAS.dd;
     set_time::Union{Nothing, Float64}=nothing,
     time_index::Int=1,
-    allow_boundary_flux_correction::Bool=true,
+    allow_boundary_flux_correction::Bool=false,
 )
     # https://github.com/JuliaFusion/EFIT.jl/blob/master/src/io.jl
     g = EFIT.readg(eqdsk_file; set_time=set_time)
@@ -273,6 +273,7 @@ end
         output_format::String="json",
         eqdsk_set_time::Union{Nothing, Float64}=nothing,
         eq_time_index::Int=1,
+        allow_boundary_flux_correction::Bool=false,
     )::IMAS.dd
 
 Gathers SOLPS and EFIT files and loads them into IMAS structure. Extrapolates
@@ -286,6 +287,7 @@ function preparation(
     output_format::String="json",
     eqdsk_set_time::Union{Nothing, Float64}=nothing,
     eq_time_index::Int=1,
+    allow_boundary_flux_correction::Bool=false,
 )::IMAS.dd
     b2fgmtry, b2time, b2mn, eqdsk =
         find_files_in_allowed_folders(dirs...; eqdsk_file=eqdsk_file)
@@ -296,7 +298,13 @@ function preparation(
     println("    eqdsk = ", eqdsk)
 
     dd = IMAS.dd()
-    geqdsk_to_imas!(eqdsk, dd; set_time=eqdsk_set_time, time_index=eq_time_index)
+    geqdsk_to_imas!(
+        eqdsk,
+        dd;
+        set_time=eqdsk_set_time,
+        time_index=eq_time_index,
+        allow_boundary_flux_correction=allow_boundary_flux_correction,
+    )
     # Repairs
     add_rho_to_equilibrium!(dd)  # Doesn't do anything if rho is valid
     dd.global_time = dd.equilibrium.time_slice[1].time
