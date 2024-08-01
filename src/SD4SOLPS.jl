@@ -152,6 +152,7 @@ function geqdsk_to_imas!(
             paths, level = IMAS.flux_surface(eqt, level, :closed)
             count += 1
         end
+        println("Correcting psi_boundary from $(gq.psi_boundary) to $level so contouring will find a closed flux surface.")
         gq.psi_boundary = level
     end
 
@@ -166,30 +167,6 @@ function geqdsk_to_imas!(
     if hasproperty(g, :rhovn)
         p1.rho_tor_norm = g.rhovn
     end
-    # 1D midplane profiles
-    # Find closest row to zmaxis
-    dz = abs.(g.z .- g.zmaxis)
-    i1 = argmin(dz)
-    dz2 = dz[dz.!=dz[i1]]
-    i2 = argmin(abs.(dz .- dz2[argmin(dz2)]))
-    wi2 = (g.z[i1] - g.zmaxis) / (g.z[i1] - g.z[i2])
-    wi1 = (g.zmaxis - g.z[i2]) / (g.z[i1] - g.z[i2])
-    psi_midplane = g.psirz[:, i1] .* wi1 .+ g.psirz[:, i2] .* wi2
-    # Interpolate R against psi to find where each flux surface intersects midplane.
-    outer = g.r .>= g.rmaxis
-    inner = g.r .<= g.rmaxis
-    psi_omp = [gq.psi_axis; psi_midplane[outer]]
-    r_omp = [g.rmaxis; g.r[outer]]
-    i_omp = sortperm(psi_omp)
-    psi_omp = psi_omp[i_omp]
-    r_omp = r_omp[i_omp]
-    psi_imp = [psi_midplane[inner]; gq.psi_axis]
-    r_imp = [g.r[inner]; g.rmaxis]
-    i_imp = sortperm(psi_imp)
-    psi_imp = psi_imp[i_imp]
-    r_imp = r_imp[i_imp]
-    p1.r_outboard = Interpolations.linear_interpolation(psi_omp, r_omp)(g.psi)
-    p1.r_inboard = Interpolations.linear_interpolation(psi_imp, r_imp)(g.psi)
 
     # Derived
     psin1d = (g.psi .- gq.psi_axis) ./ (gq.psi_boundary - gq.psi_axis)
@@ -301,9 +278,13 @@ function preparation(
         time_index=eq_time_index,
         allow_boundary_flux_correction=allow_boundary_flux_correction,
     )
-    # Repairs
+    # Fill out more equilibrium data
     add_rho_to_equilibrium!(dd)  # Doesn't do anything if rho is valid
     dd.global_time = dd.equilibrium.time_slice[1].time
+    for eqt in dd.equilibrium.time_slice
+        IMAS.flux_surfaces(eqt)
+    end
+    # Add SOLPS data
     dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time; b2mn=b2mn, ids=dd)
     println("Loaded input data into IMAS DD")
 
