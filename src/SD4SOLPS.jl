@@ -1,7 +1,6 @@
 module SD4SOLPS
 
 using IMAS: IMAS
-using IMASDD: IMASDD
 using SOLPS2IMAS: SOLPS2IMAS
 using EFIT: EFIT
 using Interpolations: Interpolations
@@ -132,7 +131,7 @@ function geqdsk_to_imas!(
     p2.grid_type.index = 1  # 1 = rectangular, such as dim1 = R, dim2 = Z
     p2.grid_type.name = "R-Z grid for flux map"
     p2.grid_type.description = (
-        "A recntangular grid of points in R,Z on which poloidal " *
+        "A rectangular grid of points in R,Z on which poloidal " *
         "magnetic flux psi is defined. The grid's dim1 is R, dim2 is Z."
     )
     # missing j_tor = pcurrt
@@ -158,16 +157,13 @@ function geqdsk_to_imas!(
 
     # 1D
     p1 = eqt.profiles_1d
-    nprof = length(g.pres)
-    psi = collect(LinRange(gq.psi_axis, gq.psi_boundary, nprof))
-    p1.psi = psi
+    p1.psi = collect(g.psi)
     p1.f = g.fpol
     p1.pressure = g.pres
     p1.f_df_dpsi = g.ffprim
     p1.dpressure_dpsi = g.pprime
     p1.q = g.qpsi
     if hasproperty(g, :rhovn)
-        # rhovn is not in the original EFIT.jl but is added on a branch
         p1.rho_tor_norm = g.rhovn
     end
     # 1D midplane profiles
@@ -192,11 +188,11 @@ function geqdsk_to_imas!(
     i_imp = sortperm(psi_imp)
     psi_imp = psi_imp[i_imp]
     r_imp = r_imp[i_imp]
-    p1.r_outboard = Interpolations.linear_interpolation(psi_omp, r_omp)(psi)
-    p1.r_inboard = Interpolations.linear_interpolation(psi_imp, r_imp)(psi)
+    p1.r_outboard = Interpolations.linear_interpolation(psi_omp, r_omp)(g.psi)
+    p1.r_inboard = Interpolations.linear_interpolation(psi_imp, r_imp)(g.psi)
 
     # Derived
-    psin1d = (psi .- gq.psi_axis) ./ (gq.psi_boundary - gq.psi_axis)
+    psin1d = (g.psi .- gq.psi_axis) ./ (gq.psi_boundary - gq.psi_axis)
     gq.magnetic_axis.b_field_tor = g.bcentr * g.rcentr / g.rmaxis
     gq.q_axis = g.qpsi[1]
     gq.q_95 = Interpolations.linear_interpolation(psin1d, g.qpsi)(0.95)
