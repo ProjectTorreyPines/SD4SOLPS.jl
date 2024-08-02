@@ -152,7 +152,9 @@ function geqdsk_to_imas!(
             paths, level = IMAS.flux_surface(eqt, level, :closed)
             count += 1
         end
-        println("Correcting psi_boundary from $(gq.psi_boundary) to $level so contouring will find a closed flux surface.")
+        println(
+            "Correcting psi_boundary from $(gq.psi_boundary) to $level so contouring will find a closed flux surface.",
+        )
         gq.psi_boundary = level
     end
 
@@ -281,7 +283,7 @@ function preparation(
     # Fill out more equilibrium data
     add_rho_to_equilibrium!(dd)  # Doesn't do anything if rho is valid
     dd.global_time = dd.equilibrium.time_slice[1].time
-    for eqt in dd.equilibrium.time_slice
+    for eqt ∈ dd.equilibrium.time_slice
         IMAS.flux_surfaces(eqt)
     end
     # Add SOLPS data
