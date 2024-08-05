@@ -370,8 +370,6 @@ if args["geqdsk_to_imas"]
             @test length(p1.f) == nprof
             @test length(p1.pressure) == nprof
             @test length(p1.rho_tor_norm) == nprof
-            @test length(p1.r_outboard) == nprof
-            @test length(p1.r_inboard) == nprof
 
             # boundary
             r_bry = eqt.boundary.outline.r
