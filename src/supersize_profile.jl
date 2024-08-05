@@ -2,7 +2,7 @@
 Utilities for extrapolating profiles
 """
 
-using IMASDD: IMASDD
+using IMAS: IMAS
 using Interpolations: Interpolations
 using GGDUtils:
     GGDUtils, get_grid_subset, add_subset_element!, get_subset_boundary,
@@ -66,7 +66,7 @@ function extrapolate_core(
     edge_quantity::Vector{Float64},
     rho_output::Vector{Float64},
 )::Vector{Float64}
-    grad = IMASDD.gradient(edge_rho, edge_quantity)
+    grad = IMAS.gradient(edge_rho, edge_quantity)
     gf = grad[1]
     rf = edge_rho[1]
     gmid = -abs(gf) / 4.0
@@ -103,7 +103,7 @@ end
 
 """
     fill_in_extrapolated_core_profile!(
-        dd::IMASDD.dd,
+        dd::IMAS.dd,
         quantity_name::String;
         method::String="simple",
         eq_time_idx::Int=1,
@@ -143,7 +143,7 @@ Input arguments:
     this index should be set to -5.
 """
 function fill_in_extrapolated_core_profile!(
-    dd::IMASDD.dd,
+    dd::IMAS.dd,
     quantity_name::String;
     method::String="simple",
     eq_time_idx::Int=1,
@@ -243,7 +243,7 @@ function fill_in_extrapolated_core_profile!(
             ).(psi_for_quantity[in_bounds])
 
         # Make sure the output 1D rho grid exists; create it if needed
-        if IMASDD.ismissing(dd.core_profiles.profiles_1d[it].grid, :rho_tor_norm)
+        if IMAS.ismissing(dd.core_profiles.profiles_1d[it].grid, :rho_tor_norm)
             # If you don't like this default, then you should write grid.rho_tor_norm
             # before calling this function.
             dd.core_profiles.profiles_1d[it].grid.rho_tor_norm =
@@ -305,7 +305,7 @@ function extrapolate_edge_exp(
 end
 
 """
-    prep_flux_map(dd::IMASDD.dd; eq_time_idx::Int=1, eq_profiles_2d_idx::Int=1)
+    prep_flux_map(dd::IMAS.dd; eq_time_idx::Int=1, eq_profiles_2d_idx::Int=1)
 
 Reads equilibrium data and extracts/derives some useful quantities.
 This is very basic, but it was being repeated and that's a no-no.
@@ -316,7 +316,7 @@ Returns:
   - normalized poloidal flux on the equilibrium grid
   - a linear interpolation of norm pol flux vs. R and Z, ready to be evaluated
 """
-function prep_flux_map(dd::IMASDD.dd; eq_time_idx::Int=1, eq_profiles_2d_idx::Int=1)
+function prep_flux_map(dd::IMAS.dd; eq_time_idx::Int=1, eq_profiles_2d_idx::Int=1)
     eqt = dd.equilibrium.time_slice[eq_time_idx]
     p2 = eqt.profiles_2d[eq_profiles_2d_idx]
     r_eq = p2.grid.dim1
@@ -331,7 +331,7 @@ end
 
 """
     mesh_psi_spacing(
-        dd::IMASDD.dd;
+        dd::IMAS.dd;
         eq_time_idx::Int=1,
         eq_profiles_2d_idx::Int=1,
         grid_ggd_idx::Int=1,
@@ -364,7 +364,7 @@ Input Arguments:
     same as the spacing at the edge of the mesh, or the same as the average spacing
 """
 function mesh_psi_spacing(
-    dd::IMASDD.dd;
+    dd::IMAS.dd;
     eq_time_idx::Int=1,
     eq_profiles_2d_idx::Int=1,
     grid_ggd_idx::Int=1,
@@ -427,7 +427,7 @@ end
 
 """
     pick_extension_psi_range(
-        dd::IMASDD.dd;
+        dd::IMAS.dd;
         eq_time_idx::Int=1,
         eq_profiles_2d_idx::Int=1,
         grid_ggd_idx::Int=1,
@@ -440,7 +440,7 @@ out to the most distant (in flux space) point on the limiting surface.
 Returns a vector of `psi_N` levels.
 """
 function pick_extension_psi_range(
-    dd::IMASDD.dd;
+    dd::IMAS.dd;
     eq_time_idx::Int=1,
     eq_profiles_2d_idx::Int=1,
     grid_ggd_idx::Int=1,
@@ -489,8 +489,8 @@ end
 
 """
     pick_mesh_ext_starting_points(
-        grid_ggd::IMASDD.edge_profiles__grid_ggd,
-        space::IMASDD.edge_profiles__grid_ggd___space,
+        grid_ggd::IMAS.edge_profiles__grid_ggd,
+        space::IMAS.edge_profiles__grid_ggd___space,
     )::Tuple{Vector{Float64}, Vector{Float64}}
 
 Picks starting points for the radial lines of the mesh extension. The strategy
@@ -499,8 +499,8 @@ gradient (of psi_N) to extend these gridlines outward.
 Returns a tuple with vectors of R and Z starting points.
 """
 function pick_mesh_ext_starting_points(
-    grid_ggd::IMASDD.edge_profiles__grid_ggd,
-    space::IMASDD.edge_profiles__grid_ggd___space,
+    grid_ggd::IMAS.edge_profiles__grid_ggd,
+    space::IMAS.edge_profiles__grid_ggd___space,
 )::Tuple{Vector{Float64}, Vector{Float64}}
     # Choose starting points for the orthogonal (to the contour) gridlines
     # Use the existing cells of the standard mesh
@@ -590,7 +590,7 @@ function mesh_ext_follow_grad(
     end
 
     # Step along the paths of steepest descent to populate the mesh.
-    dpsindr, dpsindz = IMASDD.gradient(r_eq, z_eq, psin_eq)
+    dpsindr, dpsindz = IMAS.gradient(r_eq, z_eq, psin_eq)
     dpdr = Interpolations.linear_interpolation((r_eq, z_eq), dpsindr)
     dpdz = Interpolations.linear_interpolation((r_eq, z_eq), dpsindz)
     rlim = (minimum(r_eq), maximum(r_eq))
@@ -625,7 +625,7 @@ end
 
 """
     modify_mesh_ext_near_x!(
-        eqt::IMASDD.equilibrium__time_slice,
+        eqt::IMAS.equilibrium__time_slice,
         mesh_r::Matrix{Float64},
         mesh_z::Matrix{Float64},
     )
@@ -640,7 +640,7 @@ Input Arguments:
   - `mesh_z`: matrix of Z values for the extended mesh
 """
 function modify_mesh_ext_near_x!(
-    eqt::IMASDD.equilibrium__time_slice,
+    eqt::IMAS.equilibrium__time_slice,
     mesh_r::Matrix{Float64},
     mesh_z::Matrix{Float64},
 )
@@ -723,8 +723,8 @@ end
 
 """
     record_regular_mesh!(
-        grid_ggd::IMASDD.edge_profiles__grid_ggd,
-        space::IMASDD.edge_profiles__grid_ggd___space,
+        grid_ggd::IMAS.edge_profiles__grid_ggd,
+        space::IMAS.edge_profiles__grid_ggd___space,
         mesh_r::Matrix{Float64},
         mesh_z::Matrix{Float64},
         cut::Int,
@@ -742,8 +742,8 @@ Records arrays of mesh data from regular 2D arrays into the DD
     and the next index.
 """
 function record_regular_mesh!(
-    grid_ggd::IMASDD.edge_profiles__grid_ggd,
-    space::IMASDD.edge_profiles__grid_ggd___space,
+    grid_ggd::IMAS.edge_profiles__grid_ggd,
+    space::IMAS.edge_profiles__grid_ggd___space,
     mesh_r::Matrix{Float64},
     mesh_z::Matrix{Float64},
     cut::Int,
@@ -899,7 +899,7 @@ end
 
 """
     cached_mesh_extension!(
-        dd::IMASDD.dd,
+        dd::IMAS.dd,
         eqdsk_file::String,
         b2fgmtry::String;
         eq_time_idx::Int=1,
@@ -926,7 +926,7 @@ Input Arguments:
   - `clear_cache`: delete any existing cache file (for use in testing)
 """
 function cached_mesh_extension!(
-    dd::IMASDD.dd,
+    dd::IMAS.dd,
     eqdsk_file::String,
     b2fgmtry::String;
     eq_time_idx::Int=1,
@@ -991,7 +991,7 @@ end
 
 """
     mesh_extension_sol!(
-        dd::IMASDD.dd;
+        dd::IMAS.dd;
         eq_time_idx::Int=1,
         eq_profiles_2d_idx::Int=1,
         grid_ggd_idx::Int=1,
@@ -1001,7 +1001,7 @@ end
 Extends the mesh out into the SOL
 """
 function mesh_extension_sol!(
-    dd::IMASDD.dd;
+    dd::IMAS.dd;
     eq_time_idx::Int=1,
     eq_profiles_2d_idx::Int=1,
     grid_ggd_idx::Int=1,
@@ -1048,7 +1048,7 @@ end
 
 """
     fill_in_extrapolated_edge_profile!(
-        dd::IMASDD.dd,
+        dd::IMAS.dd,
         quantity_name::String;
         method::String="simple",
         eq_time_idx::Int=1,
@@ -1057,7 +1057,7 @@ end
 JUST A PLACEHOLDER FOR NOW. DOESN'T ACTUALLY WORK YET.
 """
 function fill_in_extrapolated_edge_profile!(
-    dd::IMASDD.dd,
+    dd::IMAS.dd,
     quantity_name::String;
     method::String="simple",
     eq_time_idx::Int=1,

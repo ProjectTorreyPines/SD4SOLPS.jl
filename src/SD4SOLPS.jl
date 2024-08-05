@@ -1,6 +1,6 @@
 module SD4SOLPS
 
-using IMASDD: IMASDD
+using IMAS: IMAS
 using SOLPS2IMAS: SOLPS2IMAS
 using EFIT: EFIT
 using Interpolations: Interpolations
@@ -67,7 +67,7 @@ end
 """
     geqdsk_to_imas!(
         eqdsk_file::String,
-        dd::IMASDD.dd;
+        dd::IMAS.dd;
         set_time::Union{Nothing, Float64}=nothing,
         time_index::Int=1,
     )
@@ -77,16 +77,17 @@ the IMAS DD structure.
 """
 function geqdsk_to_imas!(
     eqdsk_file::String,
-    dd::IMASDD.dd;
+    dd::IMAS.dd;
     set_time::Union{Nothing, Float64}=nothing,
     time_index::Int=1,
+    allow_boundary_flux_correction::Bool=false,
 )
     # https://github.com/JuliaFusion/EFIT.jl/blob/master/src/io.jl
     g = EFIT.readg(eqdsk_file; set_time=set_time)
     gfilename = split(eqdsk_file, "/")[end]
     # Copying ideas from OMFIT: omfit/omfit_classes/omfit_eqdsk.py / to_omas()
     eq = dd.equilibrium
-    if IMASDD.ismissing(eq, :time)
+    if IMAS.ismissing(eq, :time)
         eq.time = Array{Float64}(undef, time_index)
     end
     eq.time[time_index] = g.time
@@ -110,7 +111,7 @@ function geqdsk_to_imas!(
     b0[time_index] = g.bcentr
     eq.vacuum_toroidal_field.b0 = b0
 
-    if IMASDD.ismissing(dd.summary, :time)
+    if IMAS.ismissing(dd.summary, :time)
         dd.summary.time = Array{Float64}(undef, time_index)
     end
     dd.summary.time[time_index] = g.time
@@ -121,31 +122,56 @@ function geqdsk_to_imas!(
     dd.summary.global_quantities.b0.value = b0
     summarize = ["ip", "r0", "b0"]
 
+    # 2D
+    resize!(eqt.profiles_2d, 1)
+    p2 = eqt.profiles_2d[1]
+    p2.grid.dim1 = collect(g.r)
+    p2.grid.dim2 = collect(g.z)
+    p2.psi = g.psirz  # Not sure if transpose is correct (I have been getting away with this for some time and suspect it's okay)
+    p2.grid_type.index = 1  # 1 = rectangular, such as dim1 = R, dim2 = Z
+    p2.grid_type.name = "R-Z grid for flux map"
+    p2.grid_type.description = (
+        "A rectangular grid of points in R,Z on which poloidal " *
+        "magnetic flux psi is defined. The grid's dim1 is R, dim2 is Z."
+    )
+    # missing j_tor = pcurrt
+
+    if allow_boundary_flux_correction
+        # Check / correct simag. Intended for the case where simag is quoted imprecisely and the contour doesn't close
+        level = gq.psi_boundary + 0
+        paths, level = IMAS.flux_surface(eqt, level, :closed)
+        count = 0  # prevents inf loop if something goes wrong
+        while (length(paths) >= 1) && (count < 50)  # push boundary flux out until there is no closed boundary
+            level += (gq.psi_boundary - gq.psi_axis) * 0.001
+            paths, level = IMAS.flux_surface(eqt, level, :closed)
+            count += 1
+        end
+        println(" --- ")
+        while (length(paths) < 1) && (count < 200)  # pull boundary flux back in until there is a closed boundary
+            level -= (gq.psi_boundary - gq.psi_axis) * 0.0001
+            paths, level = IMAS.flux_surface(eqt, level, :closed)
+            count += 1
+        end
+        println(
+            "Correcting psi_boundary from $(gq.psi_boundary) to $level so contouring will find a closed flux surface.",
+        )
+        gq.psi_boundary = level
+    end
+
     # 1D
     p1 = eqt.profiles_1d
-    nprof = length(g.pres)
-    psi = collect(LinRange(g.simag, g.sibry, nprof))
-    p1.psi = psi
+    p1.psi = collect(g.psi)
     p1.f = g.fpol
     p1.pressure = g.pres
     p1.f_df_dpsi = g.ffprim
     p1.dpressure_dpsi = g.pprime
     p1.q = g.qpsi
     if hasproperty(g, :rhovn)
-        # rhovn is not in the original EFIT.jl but is added on a branch
         p1.rho_tor_norm = g.rhovn
     end
 
-    # 2D
-    resize!(eqt.profiles_2d, 1)
-    p2 = eqt.profiles_2d[1]
-    p2.grid.dim1 = collect(g.r)
-    p2.grid.dim2 = collect(g.z)
-    p2.psi = g.psirz  # Not sure if transpose is correct
-    # missing j_tor = pcurrt
-
     # Derived
-    psin1d = (psi .- g.simag) ./ (g.sibry - g.simag)
+    psin1d = (g.psi .- gq.psi_axis) ./ (gq.psi_boundary - gq.psi_axis)
     gq.magnetic_axis.b_field_tor = g.bcentr * g.rcentr / g.rmaxis
     gq.q_axis = g.qpsi[1]
     gq.q_95 = Interpolations.linear_interpolation(psin1d, g.qpsi)(0.95)
@@ -222,7 +248,8 @@ end
         output_format::String="json",
         eqdsk_set_time::Union{Nothing, Float64}=nothing,
         eq_time_index::Int=1,
-    )::IMASDD.dd
+        allow_boundary_flux_correction::Bool=false,
+    )::IMAS.dd
 
 Gathers SOLPS and EFIT files and loads them into IMAS structure. Extrapolates
 profiles as needed to get a complete picture.
@@ -235,7 +262,8 @@ function preparation(
     output_format::String="json",
     eqdsk_set_time::Union{Nothing, Float64}=nothing,
     eq_time_index::Int=1,
-)::IMASDD.dd
+    allow_boundary_flux_correction::Bool=false,
+)::IMAS.dd
     b2fgmtry, b2time, b2mn, eqdsk =
         find_files_in_allowed_folders(dirs...; eqdsk_file=eqdsk_file)
     println("Found source files:")
@@ -244,12 +272,40 @@ function preparation(
     println("    b2mn.dat = ", b2mn)
     println("    eqdsk = ", eqdsk)
 
-    dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time; b2mn=b2mn)
-    geqdsk_to_imas!(eqdsk, dd; set_time=eqdsk_set_time, time_index=eq_time_index)
-    # Repairs
+    dd = IMAS.dd()
+    geqdsk_to_imas!(
+        eqdsk,
+        dd;
+        set_time=eqdsk_set_time,
+        time_index=eq_time_index,
+        allow_boundary_flux_correction=allow_boundary_flux_correction,
+    )
+    # Fill out more equilibrium data
     add_rho_to_equilibrium!(dd)  # Doesn't do anything if rho is valid
+    dd.global_time = dd.equilibrium.time_slice[1].time
+    for eqt ∈ dd.equilibrium.time_slice
+        IMAS.flux_surfaces(eqt)
+    end
+    # Add SOLPS data
+    dd = SOLPS2IMAS.solps2imas(b2fgmtry, b2time; b2mn=b2mn, ids=dd)
     println("Loaded input data into IMAS DD")
 
+    # Core profiles
+    # Set timing
+    nt = length(dd.edge_profiles.ggd)
+    if length(dd.core_profiles.profiles_1d) < nt
+        resize!(dd.core_profiles.profiles_1d, nt)
+    end
+    if ismissing(dd.core_profiles, :time)
+        dd.core_profiles.time = Array{Float64}(undef, nt)
+    elseif length(dd.core_profiles.time) < nt
+        resize!(dd.core_profiles.time, nt)
+    end
+    for it ∈ 1:nt
+        dd.core_profiles.time[it] =
+            dd.core_profiles.profiles_1d[it].time = dd.edge_profiles.ggd[it].time
+    end
+    # Extrapolate profiles
     core_profiles = ["electrons.density", "electrons.temperature"]
     extrapolated_core_profiles = []
     for core_profile ∈ core_profiles
@@ -279,8 +335,10 @@ function preparation(
     # ... more profiles here
     println("Extrapolated edge profiles (but not really (placeholder only))")
 
+    print("Exporting to file: ")
     if output_format == "json"
-        IMASDD.imas2json(dd, filename * ".json")
+        println(filename * ".json")
+        IMAS.imas2json(dd, filename * ".json"; strict=true, freeze=false)
     else
         throw(ArgumentError(string("Unrecognized output format: ", output_format)))
     end

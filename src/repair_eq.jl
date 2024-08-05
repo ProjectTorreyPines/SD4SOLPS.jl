@@ -14,7 +14,7 @@ export check_rho_1d
 
 """
     check_rho_1d(
-        dd::IMASDD.dd;
+        dd::IMAS.dd;
         time_slice::Int=1,
         throw_on_fail::Bool=false,
     )::Bool
@@ -22,7 +22,7 @@ export check_rho_1d
 Checks to see if rho exists and is valid in the equilibrium 1d profiles
 """
 function check_rho_1d(
-    dd::IMASDD.dd;
+    dd::IMAS.dd;
     time_slice::Int=1,
     throw_on_fail::Bool=false,
 )::Bool
@@ -56,11 +56,11 @@ function check_rho_1d(
 end
 
 """
-    function add_rho_to_equilibrium(dd:IMASDD.dd)
+    function add_rho_to_equilibrium(dd:IMAS.dd)
 
 Adds equilibrium rho profile to the DD
 """
-function add_rho_to_equilibrium!(dd::IMASDD.dd)
+function add_rho_to_equilibrium!(dd::IMAS.dd)
     nt = length(dd.equilibrium.time_slice)
     if nt < 1
         println("No equilibrium time slices to work with; can't add rho")
@@ -80,10 +80,10 @@ function add_rho_to_equilibrium!(dd::IMASDD.dd)
             end
         end
         if (
-            if IMASDD.ismissing(eqt.profiles_1d, :phi)
+            if IMAS.ismissing(eqt.profiles_1d, :phi)
                 true
             else
-                IMASDD.isempty(eqt.profiles_1d.phi)
+                IMAS.isempty(eqt.profiles_1d.phi)
             end
         )
             eqt.profiles_1d.phi = Array{Float64}(undef, n)

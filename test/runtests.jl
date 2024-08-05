@@ -1,6 +1,6 @@
 using SD4SOLPS: SD4SOLPS
 using SOLPS2IMAS: SOLPS2IMAS
-using IMASDD: IMASDD
+using IMAS: IMAS
 using EFIT: EFIT
 using Plots
 using Test
@@ -11,7 +11,7 @@ using GGDUtils: GGDUtils, get_grid_subset
 
 function parse_commandline()
     # Define newARGS = ["--yourflag"] to run only tests on your flags when including runtests.jl
-    localARGS = @isdefined(newARGS) ? newARGS : ARGS  # Thanks https://stackoverflow.com/a/44978474/6605826
+    localARGS = (@isdefined(newARGS) && newARGS !== nothing) ? newARGS : ARGS  # Thanks https://stackoverflow.com/a/44978474/6605826
     s = ArgParse.ArgParseSettings(; description="Run tests. Default is all tests.")
 
     ArgParse.add_arg_table!(s,
@@ -270,7 +270,7 @@ if args["heavy_utilities"]
 
         # Test for sweeping 1D core profiles into 2D R,Z
         # (or anyway evaluating them at any R,Z location)
-        dd = IMASDD.dd()
+        dd = IMAS.dd()
         eqdsk_file =
             splitdir(pathof(SD4SOLPS))[1] * "/../sample/geqdsk_iter_small_sample"
         SD4SOLPS.geqdsk_to_imas!(eqdsk_file, dd)
@@ -306,7 +306,7 @@ end
 if args["repair_eq"]
     @testset "repair_eq" begin
         # Prepare sample
-        dd = IMASDD.dd()
+        dd = IMAS.dd()
         eqdsk = splitdir(pathof(SD4SOLPS))[1] * "/../sample/geqdsk_iter_small_sample"
         SD4SOLPS.geqdsk_to_imas!(eqdsk, dd)
         # Make sure rho is missing
@@ -338,7 +338,7 @@ if args["geqdsk_to_imas"]
         tslice = 1
         for sample_file ∈ sample_files
             println(sample_file)
-            dd = IMASDD.dd()
+            dd = IMAS.dd()
             if endswith(sample_file, "00")
                 eqdsk_time = parse(Float64, split(sample_file, ".")[end]) / 1000.0
             else
@@ -448,5 +448,7 @@ if args["preparation"]
         @test size(psirz) == (length(r), length(z))
         println(out_file)
         @test isfile(out_file)
+        print("imas2json timing: ")
+        @time IMAS.imas2json(dd, filename * ".json", strict=true, freeze=false)
     end
 end
